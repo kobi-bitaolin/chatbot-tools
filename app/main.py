@@ -17,6 +17,7 @@ from app.config import Settings
 from app.db import Base, make_engine, make_session_factory
 from app.llm.client import LLMClient
 from app.services.conversations import ConversationNotFoundError
+from app.tools.executor import ToolExecutor
 from app.tools.registry import ToolRegistry, default_registry
 
 
@@ -51,6 +52,7 @@ def create_app(
     app.state.clock = clock or utc_now
     app.state.llm = llm or build_llm(settings)  # the SDK client itself is created lazily
     app.state.registry = registry or default_registry()
+    app.state.executor = ToolExecutor(app.state.registry)
 
     @app.exception_handler(ConversationNotFoundError)
     def conversation_not_found(request: Request, error: ConversationNotFoundError):

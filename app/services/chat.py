@@ -1,16 +1,21 @@
 """The chat service (orchestrator): one user message is one turn (architecture §4).
 
 This is the only code that writes to the app database during a turn.
-T-3 covers the turn without tools; the tool loop is added in T-7.
+A turn can have several LLM rounds: while the LLM asks for tools, the tools
+run and their results go back to it, until it gives a final answer (FR-12).
+T-11 adds the round limit; T-12 adds the other stop reasons and LLM errors.
 """
 
+import json
 from collections.abc import Callable
 from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.models import Message
+from app.llm.result import LLMResult
+from app.models import Message, ToolExecution
 from app.services.conversations import get_conversation
+from app.tools.executor import ToolCall, ToolExecutor, ToolResult
 from app.tools.registry import ToolRegistry
 
 DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
@@ -37,11 +42,19 @@ def build_system_prompt(tool_names: list[str], system_prompt: str | None) -> str
     return build_app_instructions(tool_names) + "\n\n" + (system_prompt or DEFAULT_SYSTEM_PROMPT)
 
 
+def tool_result_block(call_id: str, result: ToolResult) -> dict:
+    """One result for the LLM, paired with its call by `tool_use_id` (FR-13, FR-16)."""
+    if result.success:
+        return {"type": "tool_result", "tool_use_id": call_id, "content": json.dumps(result.output)}
+    return {"type": "tool_result", "tool_use_id": call_id, "content": result.error, "is_error": True}
+
+
 def send_message(
     session: Session,
     clock: Callable[[], datetime],
     llm,
     registry: ToolRegistry,
+    executor: ToolExecutor,
     conversation_id: str,
     content: str,
 ) -> Message:
@@ -59,28 +72,67 @@ def send_message(
     conversation.last_message_at = assistant.created_at
     session.commit()
 
-    # FR-20: history replay is added in T-8, so for now the new user message
-    # is the only message sent (which is exactly FR-20 for a first message).
+    system = build_system_prompt(registry.names(), conversation.system_prompt)
+    tools = registry.api_definitions()
+    # FR-20: history replay is added in T-8, so for now the turn starts with
+    # the new user message only (which is exactly FR-20 for a first message).
     messages = [{"role": "user", "content": content}]
-    response = llm.complete(
-        system=build_system_prompt(registry.names(), conversation.system_prompt),
-        messages=messages,
-        tools=registry.api_definitions(),
-        tool_choice={"type": "auto"},
-    )
+    turn_blocks: list[dict] = []  # everything after the user message, for llm_blocks
+    tools_used: list[dict] = []
+    tokens_used = 0
 
-    # FR-11: an answer without tools is the response's text blocks, joined.
-    # The other stop reasons (tool_use, refusal, max_tokens, ...) come in T-7 and T-12.
-    assistant.content = "".join(block.text for block in response.content if block.type == "text")
-    assistant.status = "complete"
-    assistant.tools_used = []
-    assistant.tokens_used = response.usage.input_tokens + response.usage.output_tokens
-    assistant.llm_blocks = [
-        {
-            "role": "assistant",
-            "content": [block.model_dump(mode="json", exclude_none=True) for block in response.content],
+    while True:
+        result: LLMResult = llm.complete(
+            system=system, messages=messages, tools=tools, tool_choice={"type": "auto"}
+        )
+        tokens_used += result.input_tokens + result.output_tokens  # FR-19
+        # All blocks go back unchanged (thinking included), so the LLM sees its own turn.
+        assistant_turn = {"role": "assistant", "content": result.blocks}
+        turn_blocks.append(assistant_turn)
+        if result.stop_reason != "tool_use":
+            break
+
+        results = executor.run_round([ToolCall(c.name, c.input) for c in result.tool_calls])
+        log_round(session, clock, assistant, results)  # FR-34
+        tools_used += [r.to_dict() for r in results]
+        # FR-13: ONE user message with every result, in the order they were asked for.
+        tool_turn = {
+            "role": "user",
+            "content": [tool_result_block(c.id, r) for c, r in zip(result.tool_calls, results)],
         }
-    ]
+        turn_blocks.append(tool_turn)
+        messages += [assistant_turn, tool_turn]
+
+    # FR-11 / FR-26 (end_turn): the final answer is the last response's text.
+    # The other stop reasons (refusal, max_tokens, ...) come in T-12.
+    assistant.content = result.text
+    assistant.status = "complete"
+    assistant.tools_used = tools_used
+    assistant.tokens_used = tokens_used
+    assistant.llm_blocks = turn_blocks
     conversation.last_message_at = clock()  # FR-7
     session.commit()
     return assistant
+
+
+def log_round(
+    session: Session, clock: Callable[[], datetime], assistant: Message, results: list[ToolResult]
+) -> None:
+    """FR-34: one ToolExecution row per call, saved right after its round.
+
+    Runs on the request thread, never in the tool threads (SQLAlchemy
+    sessions are not thread-safe, architecture §3.2).
+    """
+    for r in results:
+        assistant.tool_executions.append(
+            ToolExecution(
+                tool_name=r.tool,
+                input=r.input,
+                output=r.output,
+                success=r.success,
+                error_message=r.error,
+                execution_time_ms=r.execution_time_ms,
+                created_at=clock(),
+            )
+        )
+    session.commit()
