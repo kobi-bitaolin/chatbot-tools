@@ -8,7 +8,7 @@ places, in the format each one needs:
   translates it for the provider (FR-37).
 """
 
-from app.tools import calculator, weather, web_search
+from app.tools import calculator, datetime_tool, weather, web_search
 from app.tools.base import Tool
 
 
@@ -38,5 +38,5 @@ class ToolRegistry:
 
 
 def default_registry() -> ToolRegistry:
-    # datetime (T-9) and database_query (T-10) are added here.
-    return ToolRegistry([calculator.TOOL, web_search.TOOL, weather.TOOL])
+    # database_query (T-10) is added here.
+    return ToolRegistry([calculator.TOOL, web_search.TOOL, weather.TOOL, datetime_tool.TOOL])
