@@ -182,14 +182,15 @@ def test_ac_20_round_limit(client, fake_llm):
 
 
 def test_fr_15_forced_last_call_always_ends_the_loop(client, fake_llm):
-    # Even if the LLM asks for tools on the "none" call, nothing more runs.
+    # Even if the LLM asks for tools on the "none" call, nothing more runs. The
+    # answer is not usable, so it ends as an unexpected response (FR-26, T-12).
     fake_llm.script(
         *[tool_round(tool_use_block("calculator", {"expression": "1+1"})) for _ in range(7)]
     )
 
     reply = send(client)
 
-    assert reply.status_code == 200
+    assert reply.status_code == 502
+    assert reply.json() == {"detail": "Unexpected LLM response"}
     assert len(fake_llm.requests) == 7
-    assert len(reply.json()["tools_used"]) == 6
     assert len(executions(client)) == 6
