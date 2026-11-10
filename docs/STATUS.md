@@ -1,6 +1,6 @@
 # Project status: chatbot-tools
 
-- **Spec:** `docs/chatbot-spec.md` (not written yet; stage 3)
+- **Spec:** `docs/chatbot-spec.md` (v0.1, Draft, 2026-11-10)
 - **Source:** `chatbot-tool.md` (S1)
 - **Conventions (Git, agreed 2026-11-10):**
   - `main` always works; only tested work is merged into it.
@@ -8,11 +8,11 @@
   - One commit per task, Conventional Commits with IDs, e.g. `feat(calculator): safe expression parser (FR-5, AC-7)`. Prefixes: feat, fix, test, docs, chore.
   - `docs/` is committed. `chatbot-tool.md`, `.env`, and DB files are git-ignored.
   - Never push without an explicit yes. Remote: private GitHub repo, not set up yet.
-- **Current stage:** 2, architecture v2 (reviews applied, C1-C3 decided), awaiting final approval
+- **Current stage:** 3, spec and test plan, awaiting approval
 - **Last updated:** 2026-11-10
 
 ## Next action
-Stage 1 approved 2026-11-10. Architecture v2 written (self-review + independent review applied; C1-C3 decided). User gives final approval, then stage 3 (spec and test plan).
+Stages 1-2 approved 2026-11-10. Spec v0.1 written (35 FR, 11 NFR, 56 AC). User reviews and approves, then stage 4 (task list, then TDD).
 
 ## Open questions
 | # | Question | Blocking? |
