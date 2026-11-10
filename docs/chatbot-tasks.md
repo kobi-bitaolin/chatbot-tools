@@ -31,7 +31,7 @@ Order: the assignment's tips (S1:419-424). Basic chat → calculator → tool lo
 | T-9 | `feat/datetime-tool` | Datetime tool: current, convert, calculate, injected clock, per-operation checks, offsets, unknown timezone | FR-31, FR-17 (datetime part) | 40, 41 | T-6 | Sonnet |
 | T-10 | `feat/database-tool` | Sample DB seeder (seed date, seed 7, idempotent) and database tool: read-only `mode=ro`, authorizer (SELECT/READ/FUNCTION), 100-row limit, `truncated`, progress-handler time limit | FR-30, NFR-6, NFR-10 | 36, 37, 38, 39 | T-6 | **Opus** |
 | T-11 | `feat/tool-robustness` | Executor robustness: JSON Schema validation ("Invalid input:"), unknown tool, round deadline timeout with partial results, round limit with `tool_choice: none` | FR-15, FR-16, FR-17, FR-18, NFR-8 | 15, 17, 18, 19, 20 | T-7 | **Opus** |
-| T-12 | `feat/llm-outcomes` | LLM outcomes: 502 on SDK errors, `error` status, refusal, `max_tokens`, unexpected stop reason, failed-turn skip, refusal replay | FR-25, FR-26, FR-3 (error messages) | 26, 27, 28, 29, 30, 57 | T-8 | Sonnet |
+| T-12 | `feat/llm-outcomes` | LLM outcomes: 502 on SDK errors, `error` status, refusal, `max_tokens`, unexpected stop reason, failed-turn skip, refusal replay | FR-25, FR-26, FR-3 (error messages) | 26, 27, 28, 29, 30, 57, 58 | T-8 | Sonnet |
 | T-13 | `test/real-llm` | Real-LLM checks as tests marked `@pytest.mark.real_llm`, skipped without a key. They're written here and run in stage 5 | FR-10, FR-12, FR-13, FR-21, FR-22, FR-30 | 53, 54, 55, 56 | T-12 | Sonnet |
 
 **Milestones (I'll pause and report at each one)**
@@ -45,7 +45,7 @@ Order: the assignment's tips (S1:419-424). Basic chat → calculator → tool lo
 ## Coverage check
 
 - **AC coverage:**
-  - Automated ACs 1-47 and 57 all belong to exactly one task.
+  - Automated ACs 1-47, 57 and 58 all belong to exactly one task.
   - Real-LLM ACs 53-56 are written in T-13 and run in stage 5.
   - Manual ACs 48-52 are stage 5/6 checks (Docker, secrets, README). AC-48's Docker part is started early in T-1.
 - **FR-1..36 and NFR-1..11:** every one appears in at least one task, or in stage 5/6 (NFR-2 → AC-48, NFR-11 → AC-52).

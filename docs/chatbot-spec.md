@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 0.2 |
+| **Version** | 0.3 |
 | **Status** | Approved (2026-11-10) |
 | **Date** | 2026-11-10 |
 
@@ -70,7 +70,7 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 ### LLM outcomes
 | ID | Requirement | P | Source |
 |---|---|---|---|
-| FR-25 | If an LLM call raises any `anthropic.APIError` (connection, timeout, rate limit or HTTP status error, after the SDK's retries), the API must return 502 `{"detail": "LLM service unavailable"}`. The assistant message gets status `error` and content "LLM service unavailable". Tool executions already run stay logged. The original error is written to the server log | M | S3 §4 |
+| FR-25 | If an LLM call fails: it raises any `anthropic.APIError` (connection, timeout, rate limit or HTTP status error, after the SDK's retries), or the call can't be made at all (for example no API key is configured, which the SDK reports as a `TypeError`), the API must return 502 `{"detail": "LLM service unavailable"}`. The assistant message gets status `error` and content "LLM service unavailable". Tool executions already run stay logged. The original error is written to the server log | M | S3 §4 |
 | FR-26 | `stop_reason` handling: `end_turn` → content = the text blocks joined (status `complete`). `refusal` → content "I can't help with that request." (status `complete`). `max_tokens` → the text so far + " [response cut off]" (status `complete`). Any other value → 502 `{"detail": "Unexpected LLM response"}`, with status `error` and content "Unexpected LLM response" | M | S3 §4 step 5 |
 
 ### Tools
@@ -156,6 +156,7 @@ None.
 |---|---|---|
 | 0.1 | 2026-11-10 | First draft from S1-S3 |
 | 0.2 | 2026-11-10 | Independent review, 17 findings applied: calculator float/finite checks and domain errors (FR-27); exact error strings (FR-25, FR-26); replay rule and `llm_blocks` structure (FR-21, FR-22); round-limit entries logged (FR-15); timeout formatting (FR-18); ordering by id/clock (FR-2, FR-3); datetime output and offsets (FR-31); `row_count` (FR-30); empty system_prompt (FR-1); FR-36 model settings; reworked AC-15, 19, 20, 26, 27, 30, 32, 36, 37, 39, 41, 43, 46, 47; added AC-57 |
+| 0.3 | 2026-11-10 | Q5 (found in the T-3 Docker smoke test, approved by the user): FR-25 also covers an LLM call that can't be made (no API key → SDK `TypeError`), which gave a 500 and a message stuck in `pending`. Added AC-58 (T-12) |
 
 ---
 
@@ -235,6 +236,7 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 ### LLM outcomes
 | AC | FR/NFR | Given / When / Then | Level | Test |
 |---|---|---|---|---|
+| AC-58 | FR-25 | **Given** the real `LLMClient` with no API key set (no fake) **when** a message is sent **then** 502 `{"detail": "LLM service unavailable"}`, and the assistant message has status `error` (not stuck in `pending`) with content "LLM service unavailable" | int auto | `test_ac_58_no_api_key_502` |
 | AC-27 | FR-25, FR-34 | **Given** fake round 1 requests calculator, and round 2 raises an SDK connection error **then** 502 `{"detail": "LLM service unavailable"}`; the assistant message has status `error` and content "LLM service unavailable"; 1 ToolExecution row is still saved | int auto | `test_ac_27_llm_failure_502` |
 | AC-28 | FR-26 | **Given** fake stop_reason `refusal` **then** 200, content "I can't help with that request.", status complete | int auto | `test_ac_28_refusal` |
 | AC-29 | FR-26 | **Given** fake text "Partial" with `max_tokens` **then** content "Partial [response cut off]" | int auto | `test_ac_29_max_tokens` |
@@ -318,7 +320,7 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | FR-22 | 24, 55 |
 | FR-23 | 25 |
 | FR-24 | 2, 3 |
-| FR-25 | 26, 27 |
+| FR-25 | 26, 27, 58 |
 | FR-26 | 28, 29, 30, 57 |
 | FR-27 | 16, 31, 32 |
 | FR-28 | 34 |

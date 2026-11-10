@@ -1,6 +1,6 @@
 # Project status: chatbot-tools
 
-- **Spec:** `docs/chatbot-spec.md` (v0.2, Approved, 2026-11-10)
+- **Spec:** `docs/chatbot-spec.md` (v0.3, Approved, 2026-11-10)
 - **Source:** `chatbot-tool.md` (S1)
 - **Conventions (Git, agreed 2026-11-10):**
   - `main` always works; only tested work is merged into it.
@@ -9,11 +9,11 @@
   - `docs/` is committed. `chatbot-tool.md`, `.env`, and DB files are git-ignored.
   - Remote: private repo https://github.com/kobi-bitaolin/chatbot-tools (created 2026-11-10).
   - **Standing yes (2026-11-10):** push `main` to `origin` after every merged task. Anything else (other branches, force-push, changing visibility, adding collaborators) needs a fresh yes. Make it public / share only at stage 6 with a fresh yes.
-- **Current stage:** 4b, TDD implementation, T-1..T-3 done (Milestone 1); next T-4
+- **Current stage:** 4b, TDD implementation, T-1..T-3 done (Milestone 1 approved); next T-4
 - **Last updated:** 2026-11-10
 
 ## Next action
-Stages 1-3 and the task list approved 2026-11-10. T-1..T-3 done. T-3 is committed on `feat/basic-chat`, **not merged yet**. Waiting on the Milestone 1 report: (1) yes to merge `feat/basic-chat` into `main`, push `main`, delete the branch; (2) decision on Q5. Then T-4 (calculator, **Opus**).
+Stages 1-3 and the task list approved 2026-11-10. T-1..T-3 done and merged; Milestone 1 approved 2026-11-10. Next: T-4 (calculator, **Opus**).
 
 ## Open questions
 | # | Question | Blocking? |
@@ -24,7 +24,8 @@ Stages 1-3 and the task list approved 2026-11-10. T-1..T-3 done. T-3 is committe
 | Q3 | ~~Gap recommendations~~ All accepted | No |
 | G6, G7 | ~~DB approach, limits~~ Decided in architecture §13 | No |
 | Q4 | ~~Git init and commit style~~ Done 2026-11-10 (see Conventions) | No |
-| Q5 | No API key (or a bad auth setup): the SDK raises `TypeError` at request time, not `anthropic.APIError`, so FR-25 doesn't cover it. Today: HTTP 500 and the assistant message stays `pending` forever. Proposal: extend FR-25 so any failure to make the LLM call gives 502 "LLM service unavailable" + status `error`; add an AC; build it in T-12 | No (T-12) |
+| Q5 | ~~No API key gives 500 + stuck `pending`~~ Approved 2026-11-10: FR-25 extended, AC-58 added, built in T-12 (spec v0.3) | No |
+| Q6 | ~~Refusal fallbacks (beta)~~ Out of scope 2026-11-10: not in S1; FR-26 already handles refusals. At most a README "with more time" line in stage 6 | No |
 
 ## Later, if time allows (remind the user at the end of stage 5)
 - Nice to have: custom tool registration, tool usage analytics, conversation summarization, rate limiting per tool (REQ-43..46)
@@ -38,7 +39,7 @@ See `docs/chatbot-tasks.md`.
 |---|---|
 | T-1 skeleton | done 2026-11-10 |
 | T-2 conversations | done 2026-11-10 |
-| T-3 basic chat | done 2026-11-10 (branch `feat/basic-chat`, merge pending) |
+| T-3 basic chat | done 2026-11-10 |
 | T-4..T-13 | not started |
 
 ## AI usage log
@@ -54,4 +55,5 @@ See `docs/chatbot-tasks.md`.
 ## Decisions and changes since spec approval
 | Date | Change | Spec version | Affected IDs |
 |---|---|---|---|
+| 2026-11-10 | Q5: FR-25 also covers an LLM call that can't be made (no API key). New AC-58 in T-12 | 0.3 | FR-25, AC-58, T-12 |
 | 2026-11-10 | Host port made configurable (`API_PORT`, default 8000) because port 8000 was taken on this machine. Deployment detail only, no behavior change | 0.2 | NFR-2 (AC-48 uses `API_PORT` if 8000 is taken) |
