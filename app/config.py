@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # Only needed when the real LLM is called; the app starts without it.
     gemini_api_key: str | None = None
     llm_model: str = "gemini-3.1-flash-lite"  # FR-36, D9
+    tool_timeout_s: float = 5.0  # FR-18: one deadline per tool round
 
     # Folder holding app.db and sample.db (a Docker volume in production).
     data_dir: Path = Path("data")

@@ -56,7 +56,7 @@ def create_app(
     app.state.clock = clock
     app.state.llm = llm or build_llm(settings)  # the SDK client itself is created lazily
     app.state.registry = registry or default_registry(settings.sample_db_path)
-    app.state.executor = ToolExecutor(app.state.registry)
+    app.state.executor = ToolExecutor(app.state.registry, timeout_s=settings.tool_timeout_s)
 
     @app.exception_handler(ConversationNotFoundError)
     def conversation_not_found(request: Request, error: ConversationNotFoundError):

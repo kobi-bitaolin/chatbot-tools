@@ -3,7 +3,9 @@
 This is the only code that writes to the app database during a turn.
 A turn can have several LLM rounds: while the LLM asks for tools, the tools
 run and their results go back to it, until it gives a final answer (FR-12).
-T-11 adds the round limit; T-12 adds the other stop reasons and LLM errors.
+After MAX_TOOL_ROUNDS tool rounds, one last call with tool choice "none"
+makes the LLM answer in text (FR-15). T-12 adds the other stop reasons and
+LLM errors.
 """
 
 import json
@@ -20,6 +22,8 @@ from app.tools.registry import ToolRegistry
 
 DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
 MAX_HISTORY_TURNS = 20  # FR-23
+MAX_TOOL_ROUNDS = 5  # FR-15
+LIMIT_ERROR = "Tool call limit reached"
 
 
 def build_app_instructions(tool_names: list[str]) -> str:
@@ -111,19 +115,30 @@ def send_message(
     turn_blocks: list[dict] = []  # everything after the user message, for llm_blocks
     tools_used: list[dict] = []
     tokens_used = 0
+    tool_rounds = 0
+    tool_choice = {"type": "auto"}
 
     while True:
         result: LLMResult = llm.complete(
-            system=system, messages=messages, tools=tools, tool_choice={"type": "auto"}
+            system=system, messages=messages, tools=tools, tool_choice=tool_choice
         )
         tokens_used += result.input_tokens + result.output_tokens  # FR-19
         # All blocks go back unchanged (thinking included), so the LLM sees its own turn.
         assistant_turn = {"role": "assistant", "content": result.blocks}
         turn_blocks.append(assistant_turn)
-        if result.stop_reason != "tool_use":
+        # Stop on a final answer, and always after the forced last call (FR-15).
+        if result.stop_reason != "tool_use" or tool_choice["type"] == "none":
             break
 
-        results = executor.run_round([ToolCall(c.name, c.input) for c in result.tool_calls])
+        calls = [ToolCall(c.name, c.input) for c in result.tool_calls]
+        if tool_rounds < MAX_TOOL_ROUNDS:
+            results = executor.run_round(calls)
+            tool_rounds += 1
+        else:
+            # FR-15: these calls don't run. Each gets the limit error, and the
+            # next call is the last one, with tools turned off.
+            results = [limit_result(call) for call in calls]
+            tool_choice = {"type": "none"}
         log_round(session, clock, assistant, results)  # FR-34
         tools_used += [r.to_dict() for r in results]
         # FR-13: ONE user message with every result, in the order they were asked for.
@@ -144,6 +159,18 @@ def send_message(
     conversation.last_message_at = clock()  # FR-7
     session.commit()
     return assistant
+
+
+def limit_result(call: ToolCall) -> ToolResult:
+    """FR-15: the result for a call that was not run because of the round limit."""
+    return ToolResult(
+        tool=call.name,
+        input=call.input,
+        output=None,
+        success=False,
+        error=LIMIT_ERROR,
+        execution_time_ms=0,
+    )
 
 
 def log_round(

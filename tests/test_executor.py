@@ -1,7 +1,7 @@
 """Tool executor core (T-6, architecture §3.2): parallel run, request order, error catching.
 
 Parallelism is checked with Events, not timing, so the tests are never flaky.
-Unknown tools, schema validation and timeouts are T-11.
+T-11 adds: unknown tools, schema validation and the round deadline (below).
 """
 
 import logging
@@ -14,8 +14,8 @@ from app.tools.registry import ToolRegistry
 SCHEMA = {"type": "object", "properties": {}}
 
 
-def make_tool(name, run):
-    return Tool(name=name, description=name, parameters=SCHEMA, run=run)
+def make_tool(name, run, schema=SCHEMA):
+    return Tool(name=name, description=name, parameters=schema, run=run)
 
 
 def test_executor_runs_in_parallel_and_keeps_request_order():
@@ -37,7 +37,11 @@ def test_executor_runs_in_parallel_and_keeps_request_order():
 
 
 def test_executor_success_result_shape():
-    executor = ToolExecutor(ToolRegistry([make_tool("echo", lambda text: {"text": text})]))
+    executor = ToolExecutor(ToolRegistry([make_tool(
+        "echo",
+        lambda text: {"text": text},
+        {"type": "object", "properties": {"text": {"type": "string"}}},
+    )]))
 
     [result] = executor.run_round([ToolCall("echo", {"text": "hi"})])
 
@@ -83,3 +87,45 @@ def test_executor_real_calculator(tmp_path):
     [result] = ToolExecutor(default_registry(tmp_path / "sample.db")).run_round([ToolCall("calculator", {"expression": "2+2"})])
 
     assert (result.success, result.output) == (True, {"result": 4.0})
+
+
+def test_fr_18_timeout_message_uses_g_format():
+    release = threading.Event()
+    executor = ToolExecutor(
+        ToolRegistry([make_tool("slow", lambda **_: release.wait() or {})]), timeout_s=0.5
+    )
+    try:
+        [result] = executor.run_round([ToolCall("slow", {})])
+    finally:
+        release.set()
+    assert (result.success, result.error, result.output) == (False, "Timed out after 0.5s", None)
+
+
+def test_fr_18_one_deadline_for_the_whole_round():
+    """Two slow calls share ONE deadline: the round takes ~1 timeout, not 2."""
+    import time
+
+    release = threading.Event()
+    slow = make_tool("slow", lambda **_: release.wait() or {})
+    executor = ToolExecutor(ToolRegistry([slow]), timeout_s=0.3)
+    start = time.perf_counter()
+    try:
+        results = executor.run_round([ToolCall("slow", {}), ToolCall("slow", {})])
+    finally:
+        release.set()
+    assert time.perf_counter() - start < 0.55
+    assert [r.error for r in results] == ["Timed out after 0.3s"] * 2
+
+
+def test_fr_17_schema_limits_are_checked(tmp_path):
+    from app.tools.registry import default_registry
+
+    executor = ToolExecutor(default_registry(tmp_path / "sample.db"))
+    wrong_type, too_long = executor.run_round(
+        [ToolCall("datetime", {"operation": "calculate", "datetime": "2026-11-10", "days": "3"}),
+         ToolCall("calculator", {"expression": "1+" * 100 + "1"})]  # 201 characters
+    )
+    assert wrong_type.error.startswith("Invalid input:")
+    # AC-33: the 201-char expression is stopped by the schema's maxLength, before the parser.
+    assert too_long.error.startswith("Invalid input:")
+    assert "too long" in too_long.error
