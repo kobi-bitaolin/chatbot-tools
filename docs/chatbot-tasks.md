@@ -1,7 +1,7 @@
 # Chatbot Tools: Task List
 
 - **Spec:** `docs/chatbot-spec.md` v0.2 (Approved 2026-11-10)
-- **Status:** Draft, awaiting approval
+- **Status:** Approved (2026-11-10)
 - **Date:** 2026-11-10
 
 **Rules for every task** (S3, spec §10)
