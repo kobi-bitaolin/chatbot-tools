@@ -1,7 +1,7 @@
 """Shared test fixtures.
 
 Every test runs with:
-- no ANTHROPIC_API_KEY (tests must never need a real key),
+- no GEMINI_API_KEY (tests must never need a real key),
 - network sockets blocked (tests must never call the internet),
 - its own temporary data folder (tests never touch real data),
 - the fake LLM in the `client` fixture (tests never reach the real LLM).
@@ -43,7 +43,8 @@ class TickingClock:
 
 @pytest.fixture(autouse=True)
 def no_api_key(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)  # the Gemini SDK reads this one too
 
 
 LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}

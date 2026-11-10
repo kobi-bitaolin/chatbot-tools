@@ -28,7 +28,7 @@ def utc_now() -> datetime:
 def build_llm(settings: Settings, sdk=None) -> LLMClient:
     """Wiring: read the settings here, so the LLM client never imports config (NFR-12)."""
     return LLMClient(
-        api_key=settings.anthropic_api_key,
+        api_key=settings.gemini_api_key,
         model=settings.llm_model,
         sdk=sdk,
     )

@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_ignore_empty=True)
 
     # Only needed when the real LLM is called; the app starts without it.
-    anthropic_api_key: str | None = None
-    llm_model: str = "claude-opus-5-5"
+    gemini_api_key: str | None = None
+    llm_model: str = "gemini-3.1-flash-lite"  # FR-36, D9
 
     # Folder holding app.db and sample.db (a Docker volume in production).
     data_dir: Path = Path("data")
