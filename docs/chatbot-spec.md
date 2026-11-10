@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 0.7 |
+| **Version** | 0.8 |
 | **Status** | Approved (2026-11-10) |
 | **Date** | 2026-11-10 |
 
@@ -78,7 +78,7 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 |---|---|---|---|
 | FR-27 | **Calculator** evaluates `expression` safely (an `ast` whitelist, `^` = power) and returns `{"result": float}`. **All numbers are converted to float**, and after every operation and function call a result that isn't finite (inf/nan) gives "Result too large", as does `OverflowError`. Errors: "Invalid expression" (syntax, a non-whitelisted node or name, a wrong argument count, math domain errors such as `sqrt(-1)` or `log(0)`), "Division by zero", "Exponent too large" (absolute exponent > 1000), "Result too large" | M | S1:170-181, D4 |
 | FR-28 | **Web search** (mock) returns `{"results": [{title, snippet, url}]}` for queries that match predefined keywords, and `{"results": []}` otherwise | M | S1:183-190, G5 |
-| FR-29 | **Weather** (mock) returns `{location, temperature (°C, integer -30..45), condition (one of sunny/cloudy/rainy/snowy/windy/foggy), humidity (integer 0..100)}`, from an injectable random generator | M | S1:192-199 |
+| FR-29 | **Weather** (mock) returns `{location, temperature (°C, integer -30..45), condition (one of sunny/cloudy/rainy/snowy/windy/foggy), humidity (integer 0..100)}`, from an injectable random generator. The tool description tells the LLM the unit (°C), because the output is a bare number | M | S1:192-199 |
 | FR-30 | **Database query** runs one read-only SELECT on `sample.db` and returns `{columns, rows, row_count, truncated}`. It returns at most 100 rows. `row_count` is the number of rows returned, and `truncated` is true if more exist | M | S1:201-208, C1, D4 |
 | FR-31 | **Date/time** supports `current` (optional `timezone`, default UTC), `convert` (`datetime`, `from_tz`, `to_tz`) and `calculate` (`datetime` + at least one of `days`/`hours`/`minutes`, which may be negative). The output is `{"result": "<ISO 8601>"}` only: with offset when a timezone is known (`current`, `convert`, or a `calculate` input that has an offset), without offset for a `calculate` input without one. For `convert`, `datetime` must have no offset (`from_tz` defines it); an input with an offset gives "Invalid input: datetime must not include an offset for convert". Unknown timezone → "Unknown timezone: X" | M | S1:210-219 |
 | FR-32 | `GET /tools` must return `{"tools": [{name, description, parameters}]}` for all 5 tools, with `parameters` in the S1:102-119 format | M | S1:270-280 |
@@ -136,7 +136,7 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 |---|---|---|
 | `calculator` | "Evaluate a math expression. Use for ANY arithmetic, percentages or math functions, even trivial ones or ones you think have no answer (such as division by zero): the tool reports the error. Never calculate in your head." | `expression: string (maxLength 200)`, required |
 | `web_search` | "Search the web for current information. Returns titles, snippets and URLs." | `query: string (maxLength 300)`, required |
-| `weather` | "Get the current weather for a location." | `location: string (maxLength 100)`, required |
+| `weather` | "Get the current weather for a location. Temperature is in °C." | `location: string (maxLength 100)`, required |
 | `database_query` | "Run ONE read-only SQLite SELECT on the store database. Tables: users(id, name, email, country, created_at), products(id, name, category, price), orders(id, user_id, order_date, status, total), order_items(id, order_id, product_id, quantity, unit_price). Use date('now', ...) for relative dates." | `sql: string (maxLength 2000)`, required |
 | `datetime` | "Current date/time, timezone conversion, or adding/subtracting time. Timezones are IANA names like Europe/London." | `operation: enum[current, convert, calculate]` (required), `timezone`, `datetime` (ISO 8601), `from_tz`, `to_tz`: strings; `days`, `hours`, `minutes`: integers |
 
@@ -163,6 +163,7 @@ None.
 | 0.5 | 2026-11-10 | Separation of concerns made explicit (approved by the user while starting T-6): new NFR-12 (S1:30) with AC-59 (import boundaries, T-6; the routes/`app.models` rule from T-8), AC-60 (neutral `LLMResult`, T-7) and AC-61 (tool names in the prompt from the registry, T-6). FR-24 wording extended. Architecture §2.1 and D8 added |
 | 0.6 | 2026-11-10 | Scope review against S1 (approved by the user): removed what S1 doesn't ask for. FR-33: no `strict`, no `additionalProperties`, `input_schema` = `parameters` unchanged (Q7 and R9 no longer apply). FR-36: no `thinking` parameter, `LLM_EFFORT` setting removed, effort fixed at `medium`. AC-43 and AC-53 reworded. Requirements doc: REQ-51 (S1:30) added → NFR-12 |
 | 0.7 | 2026-11-10 | LLM provider changed from Claude to Google Gemini (user's decision: Gemini credits). New D9 and FR-37 (internal format; only `app/llm` translates to Gemini). FR-10, FR-15, FR-25 (own `LLMUnavailableError`), FR-26, FR-33, FR-36, NFR-3, NFR-12, A3 reworded. AC-43, 47, 53, 58, 59, 60 reworded; AC-62, AC-63 added. Env var `ANTHROPIC_API_KEY` → `GEMINI_API_KEY`. New task T-7b. Risk R1 (found in a real-Gemini check: "What is 1/0?" answered without the calculator, 0/3): calculator description in §6 and the D0 app instructions now say that impossible or trivial math also goes to the calculator |
+| 0.8 | 2026-11-10 | Found in the user's manual T-8 check (approved by the user): real Gemini reported mock temperatures as °F, because nothing told it the unit. FR-29: the weather description now says the temperature is in °C (output keys unchanged, S1:196). §6 and AC-35 updated. New task T-8b |
 
 ---
 
@@ -256,7 +257,7 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | AC-32 | FR-27 | `"1/0"`→"Division by zero"; `"2 +"`, `"sqrt(-1)"`, `"log(0)"`, `"sqrt(1, 2)"`→"Invalid expression"; `"9**9**9"`→"Exponent too large"; `"10.0**400"`, `"1e999"`, `"1e308*10"`, `"((2**1000)**1000)**1000"`→"Result too large"; every result is JSON-serialisable (no inf/nan) | unit auto | `test_ac_32_calculator_errors` |
 | AC-33 | NFR-5 | `"__import__('os')"`, `"().__class__"`, `"open('x')"`, `"a+1"` → "Invalid expression"; a 201-char expression → "Invalid input:" (through the executor); the module source contains no `eval(` or `exec(` | unit auto | `test_ac_33_calculator_security` |
 | AC-34 | FR-28 | `"python"`→ ≥1 result, each with title/snippet/url; `"zzqx"`→`[]` | unit auto | `test_ac_34_web_search` |
-| AC-35 | FR-29 | With `Random(42)`: same output on two calls with fresh generators; temperature, condition and humidity within FR-29 ranges over 100 calls | unit auto | `test_ac_35_weather` |
+| AC-35 | FR-29 | With `Random(42)`: same output on two calls with fresh generators; temperature, condition and humidity within FR-29 ranges over 100 calls; the tool description contains "°C" | unit auto | `test_ac_35_weather` |
 | AC-36 | FR-30, NFR-10 | Seed date 2026-11-10, seed 7: `SELECT COUNT(*) FROM orders WHERE order_date >= '2026-10-01' AND order_date < '2026-11-01'` (literal dates, never `date('now')` in tests) returns one row with the exact golden count. The count is computed once when the seeder is written and fixed in the test, so the test fails if the seed data changes. Seeding twice gives identical data, and all `order_date` are within 2025-11-10..2026-11-10 | unit auto | `test_ac_36_database_query` |
 | AC-37 | FR-30 | `SELECT * FROM orders` → 100 rows, `row_count` 100, `truncated: true` | unit auto | `test_ac_37_database_row_limit` |
 | AC-38 | NFR-6 | INSERT, UPDATE, DELETE, DROP TABLE, CREATE TABLE, ATTACH, PRAGMA, `SELECT 1; SELECT 2`, and `SELECT * FROM conversations` → all error results; row counts unchanged | unit auto | `test_ac_38_database_security` |

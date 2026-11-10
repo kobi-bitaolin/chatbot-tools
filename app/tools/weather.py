@@ -34,7 +34,8 @@ def run(location: str, rng: random.Random = _default_rng) -> dict:
 
 TOOL = Tool(
     name="weather",
-    description="Get the current weather for a location.",
+    # The unit is stated here because the output is a bare number (spec v0.8, FR-29).
+    description="Get the current weather for a location. Temperature is in °C.",
     parameters={
         "type": "object",
         "properties": {
