@@ -14,7 +14,7 @@
 - **Last updated:** 2026-11-10
 
 ## Next action
-Stages 1-3 and the task list approved 2026-11-10. T-1..T-3 done and merged; Milestone 1 approved 2026-11-10. T-4 done and merged. T-5 committed on `feat/mock-tools`, merge waiting for a yes. Next: T-6 (tool base, registry, `GET /tools`, executor core, LLM request settings, **Opus**).
+Stages 1-3 and the task list approved 2026-11-10. T-1..T-3 done and merged; Milestone 1 approved 2026-11-10. T-4 done and merged. T-5 done and merged. Next: T-6 (tool base, registry, `GET /tools`, executor core, LLM request settings, **Opus**).
 
 ## Open questions
 | # | Question | Blocking? |
@@ -42,7 +42,7 @@ See `docs/chatbot-tasks.md`.
 | T-2 conversations | done 2026-11-10 |
 | T-3 basic chat | done 2026-11-10 |
 | T-4 calculator | done 2026-11-10 |
-| T-5 mock tools | done 2026-11-10 (branch `feat/mock-tools`, merge pending) |
+| T-5 mock tools | done 2026-11-10 |
 | T-6..T-13 | not started |
 
 ## AI usage log
