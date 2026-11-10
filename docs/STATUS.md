@@ -11,7 +11,7 @@
   - **Standing yes (2026-11-10):** push `main` to `origin` after every merged task. Anything else (other branches, force-push, changing visibility, adding collaborators) needs a fresh yes. Make it public / share only at stage 6 with a fresh yes.
   - **Merges need a yes per task** (2026-11-10: the user declined a standing yes for merge + branch delete).
   - **Scope (2026-11-10):** build strictly what S1 asks, nothing else. `Message.status` kept (user's choice) as the way to handle failed turns (S1:328).
-- **Current stage:** 5, test execution, done; `docs/chatbot-verification.md` written; waiting for the user's approval before stage 6
+- **Current stage:** 6, submission, in progress on branch `docs/submission`: README.md, AI_USAGE.md (draft, waiting for the user's review and rewrite in their own words), `.env.example` fix; waiting for the user's review and the merge yes
 - **Last updated:** 2026-11-10
 
 ## Next action
@@ -59,7 +59,7 @@ See `docs/chatbot-tasks.md`.
 | T-13 real-LLM tests | done 2026-11-10 (merged) |
 
 ## AI usage log
-`docs/ai-usage-log.md` (entries so far: 29)
+`docs/ai-usage-log.md` (entries so far: 31)
 
 ## Acceptance criteria results
 - Pass: AC-1, AC-2, AC-3, AC-4, AC-6, AC-7, AC-8, AC-9, AC-11, AC-12, AC-22, AC-45, AC-46, AC-47 (also inside Docker; early AC-49 check: suite passes in the container without a key)
@@ -76,7 +76,7 @@ See `docs/chatbot-tasks.md`.
 - T-12: AC-26, AC-27, AC-28, AC-29, AC-30, AC-57, AC-58 pass (also in Docker, 127 passed)
 - Manual checks 2026-11-10 (user, Docker, real Gemini): 10/10 passed
 - Stage 5 (2026-11-10, full table in `docs/chatbot-verification.md`): every automated AC passes (incl. AC-53..56 real Gemini); AC-48, AC-49, AC-50 manual-pass
-- Not run yet: AC-51, AC-52 (stage 6)
+- Stage 6 (2026-11-10): AC-51 manual-pass (after adding `TOOL_TIMEOUT_S` and `DATA_DIR` to `.env.example`), AC-52 manual-pass; fresh `--no-cache` Docker build: health ok, real chat 200, 127 tests pass. All 63 AC pass
 
 ## Decisions and changes since spec approval
 | Date | Change | Spec version | Affected IDs |
