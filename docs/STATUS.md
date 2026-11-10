@@ -11,7 +11,7 @@
   - **Standing yes (2026-11-10):** push `main` to `origin` after every merged task. Anything else (other branches, force-push, changing visibility, adding collaborators) needs a fresh yes. Make it public / share only at stage 6 with a fresh yes.
   - **Merges need a yes per task** (2026-11-10: the user declined a standing yes for merge + branch delete).
   - **Scope (2026-11-10):** build strictly what S1 asks, nothing else. `Message.status` kept (user's choice) as the way to handle failed turns (S1:328).
-- **Current stage:** 4b, TDD implementation, T-1..T-12 done and merged; T-1..T-13 done and merged; milestone 4 reached, waiting for the user's approval before stage 5
+- **Current stage:** 4b, TDD implementation, T-1..T-13 done and merged; milestone 4 reached, waiting for the user's approval before stage 5
 - **Last updated:** 2026-11-10
 
 ## Next action
