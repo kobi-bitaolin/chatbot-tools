@@ -12,20 +12,22 @@
 - **Last updated:** 2026-11-10
 
 ## Next action
-User answers Q1-Q4 and approves `docs/chatbot-requirements.md`. Then stage 2 (architecture).
+All stage 1 questions answered. User approves `docs/chatbot-requirements.md`, then stage 2 (architecture).
 
 ## Open questions
 | # | Question | Blocking? |
 |---|---|---|
 | Q1 | ~~Scope~~ Must items first, Nice deferred (see requirements §7) | No |
 | Q2 | ~~Mock or real~~ Both mock; real weather deferred | No |
-| G15 | Streaming responses: now or later? | Yes (architecture) |
-| Q3 | Accept recommendations for gaps G1-G13 | Yes |
+| G15 | ~~Streaming~~ Deferred to "if time" | No |
+| Q3 | ~~Gap recommendations~~ All accepted | No |
+| G6, G7 | Database query approach; timeout / max rounds / context numbers | Stage 2 |
 | Q4 | ~~Git init and commit style~~ Done 2026-11-10 (see Conventions) | No |
 
 ## Later, if time allows (remind the user at the end of stage 5)
 - Nice to have: custom tool registration, tool usage analytics, conversation summarization, rate limiting per tool (REQ-43..46)
 - Real weather API instead of the mock (REQ-7)
+- Streaming responses (REQ-39)
 
 ## Tasks
 None yet (stage 4).

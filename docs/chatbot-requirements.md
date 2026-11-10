@@ -133,6 +133,7 @@ Note: REQ-40 and REQ-41 are "Should" items, but edge cases REQ-30 and REQ-31 req
 | G11 | Which Should/Nice items to build | See question Q1 |
 | G12 | The conversation id format is only shown by example (`conv_123`, S1:251) | `conv_` + a random unique suffix |
 | G13 | Message role `system` (S1:296): it's unclear whether the system prompt is stored as a message | Store it on the Conversation and send it to the LLM as the system prompt. The history endpoint shows only user/assistant messages |
+| G15 | Streaming (REQ-39) is a Should item and the hardest one | Deferred to "if time" |
 | G14 | The project folder is not a Git repo, but the submission must be a Git repo (S1:374) and the workflow commits each task | See question Q4 |
 
 ## 6. Assumptions
@@ -142,9 +143,11 @@ Note: REQ-40 and REQ-41 are "Should" items, but edge cases REQ-30 and REQ-31 req
 ## 7. Decided answers
 | # | Question | Answer | Date |
 |---|---|---|---|
-| Q1 | Scope (G11) | Essentials first: all **Must** items. Tool timeouts (REQ-40) and tool input validation (REQ-41) are included, because edge cases REQ-30/REQ-31 require them. Token count (REQ-42) is included, because `tokens_used` is part of the required response format (REQ-22). Streaming (REQ-39): see open question G15. **Nice** items (REQ-43..46) are deferred: "if there's time" | 2026-11-10 |
+| Q1 | Scope (G11) | Essentials first: all **Must** items. Tool timeouts (REQ-40) and tool input validation (REQ-41) are included, because edge cases REQ-30/REQ-31 require them. Token count (REQ-42) is included, because `tokens_used` is part of the required response format (REQ-22). Streaming (REQ-39) is deferred (Q3). **Nice** items (REQ-43..46) are deferred: "if there's time" | 2026-11-10 |
 | Q2 | Mock or real (G5) | Weather and web search are **mock** for now. A real weather API is deferred: "if there's time" | 2026-11-10 |
+| Q3 | Streaming (G15) | Deferred to "if time" | 2026-11-10 |
+| Q4 | Gaps G1-G4, G8-G10, G12, G13 | All recommendations in section 5 accepted as written | 2026-11-10 |
+| Q5 | Git (G14) | Repo initialized on `main` with feature branches and Conventional Commits. `docs/` committed, `chatbot-tool.md` ignored (see STATUS.md) | 2026-11-10 |
 
 ## 8. Open questions
-- Q1-Q4, asked in chat. G1-G3, G4, G8-G10, G12, G13 have recommendations waiting for your OK.
-- G6 and G7 move to stage 2 (they are design choices, not requirement gaps).
+- None blocking. G6 (how the database tool turns a question into a query) and G7 (timeout, max tool rounds, context limit) are design choices for stage 2.
