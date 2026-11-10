@@ -1,7 +1,7 @@
 """Conversation management tests (T-2): FR-1..FR-7, NFR-4.
 
-The chat endpoint doesn't exist yet, so tests that need messages insert
-rows straight into the database with `add_turn`.
+These tests insert turns straight into the database with `add_turn`, so
+they don't depend on the chat endpoint (tested in test_api_chat.py).
 """
 
 import re
@@ -162,11 +162,14 @@ def test_ac_7_reset(client):
     assert count_rows(client, ToolExecution) == 0
 
 
-def test_ac_8_unknown_conversation_404(client):
-    # The send-message endpoint is added to this test in T-3.
+def test_ac_8_unknown_conversation_404(client, fake_llm):
     assert client.get(f"/conversations/{UNKNOWN_ID}").status_code == 404
     assert client.delete(f"/conversations/{UNKNOWN_ID}").status_code == 404
     assert client.post(f"/conversations/{UNKNOWN_ID}/reset").status_code == 404
+    send = client.post(f"/conversations/{UNKNOWN_ID}/messages", json={"content": "Hi"})
+    assert send.status_code == 404
+    assert send.json() == {"detail": "Conversation not found"}
+    assert fake_llm.requests == []  # the LLM is never called for an unknown id
 
 
 def test_ac_46_persistence_restart(settings):

@@ -1,7 +1,8 @@
 """FastAPI application factory.
 
 Run with: uvicorn app.main:create_app --factory
-Tests call create_app(settings) with temporary folders, and may pass a fake clock.
+Tests call create_app(settings) with temporary folders, and may pass a fake
+clock and the fake LLM.
 """
 
 from collections.abc import Callable
@@ -14,6 +15,7 @@ from app import models  # noqa: F401  (importing registers the tables)
 from app.api.routes import router
 from app.config import Settings
 from app.db import Base, make_engine, make_session_factory
+from app.llm.client import LLMClient
 from app.services.conversations import ConversationNotFoundError
 
 
@@ -24,6 +26,7 @@ def utc_now() -> datetime:
 def create_app(
     settings: Settings | None = None,
     clock: Callable[[], datetime] | None = None,
+    llm=None,
 ) -> FastAPI:
     settings = settings or Settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
@@ -35,6 +38,7 @@ def create_app(
     app.state.settings = settings
     app.state.session_factory = make_session_factory(engine)
     app.state.clock = clock or utc_now
+    app.state.llm = llm or LLMClient(settings)  # the SDK client itself is created lazily
 
     @app.exception_handler(ConversationNotFoundError)
     def conversation_not_found(request: Request, error: ConversationNotFoundError):
