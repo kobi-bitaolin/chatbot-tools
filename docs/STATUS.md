@@ -11,11 +11,11 @@
   - **Standing yes (2026-11-10):** push `main` to `origin` after every merged task. Anything else (other branches, force-push, changing visibility, adding collaborators) needs a fresh yes. Make it public / share only at stage 6 with a fresh yes.
   - **Merges need a yes per task** (2026-11-10: the user declined a standing yes for merge + branch delete).
   - **Scope (2026-11-10):** build strictly what S1 asks, nothing else. `Message.status` kept (user's choice) as the way to handle failed turns (S1:328).
-- **Current stage:** 4b, TDD implementation, T-1..T-6 merged; T-7 done on `feat/tool-loop`, waiting for the merge yes
+- **Current stage:** 4b, TDD implementation, T-1..T-7 done and merged; next T-7b (Gemini switch, spec v0.7)
 - **Last updated:** 2026-11-10
 
 ## Next action
-Stages 1-3 and the task list approved 2026-11-10. T-1..T-6 done and merged (T-6 merged 2026-11-10, incl. the v0.6 scope cuts; FR-26 kept in full after the scope review). T-7 (tool loop + neutral `LLMResult`) done on `feat/tool-loop`, all 65 tests green, mutation-checked. Milestone 2 reached. **Now: merge T-7 (needs a yes), then T-8** (history, Opus). Note: until T-11 adds the round limit (FR-15), the loop has no cap; only the fake LLM is used, so this is safe.
+Stages 1-3 and the task list approved 2026-11-10. T-1..T-6 done and merged (T-6 merged 2026-11-10, incl. the v0.6 scope cuts; FR-26 kept in full after the scope review). T-7 (tool loop + neutral `LLMResult`) merged 2026-11-10, all 65 tests green, mutation-checked. Milestone 2 reached. **Now: T-7b** (Gemini switch, spec v0.7), then T-8 (history, Opus). Note: until T-11 adds the round limit (FR-15), the loop has no cap; only the fake LLM is used, so this is safe.
 
 Separation of concerns (spec v0.5, NFR-12): rules in `CLAUDE.md` and architecture §2.1, enforced by `tests/test_architecture.py` (AC-59). Leak fixes: T-6 done (`LLMClient` takes plain values; prompt tool names from the registry), T-7 `LLMResult`, T-8 message mapping into `schemas.py` (then remove the `KNOWN_EXCEPTIONS` entry in the test). D8: no repository layer.
 
@@ -48,7 +48,7 @@ See `docs/chatbot-tasks.md`.
 | T-4 calculator | done 2026-11-10 |
 | T-5 mock tools | done 2026-11-10 |
 | T-6 tool executor | done 2026-11-10 |
-| T-7 tool loop | done 2026-11-10 (on branch, merge pending) |
+| T-7 tool loop | done 2026-11-10 (merged) |
 | T-8..T-13 | not started |
 
 ## AI usage log
