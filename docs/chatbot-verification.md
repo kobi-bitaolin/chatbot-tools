@@ -4,7 +4,7 @@
 - **Spec:** `docs/chatbot-spec.md` v0.10 (Approved)
 - **Source:** `chatbot-tool.md` (S1)
 - **Run on:** 2026-11-10, `main` at `1da95cf`, model `gemini-3.1-flash-lite` (default)
-- **Result:** every acceptance criterion that belongs to stage 5 passes. AC-51 and AC-52 belong to stage 6.
+- **Result:** every acceptance criterion passes. AC-51 and AC-52 were checked in stage 6.
 
 ## 1. Automated test runs (S1:348, NFR-3)
 
@@ -203,8 +203,8 @@ The user ran 10 checks in Swagger (`/docs`) on the same container: health, creat
 | AC-48 | `docker compose up`, real "What's 2+2?" | manual-pass | §2: health 200 after 2 s; "What's 2+2?" → 200, "2 + 2 is 4.", calculator used |
 | AC-49 | suite in Docker without a key | manual-pass | §1: 127 passed in both Docker runs |
 | AC-50 | Python 3.12 image | manual-pass | §2: `python:3.12-slim`, 3.12.16 |
-| AC-51 | secrets not in the repo | stage 6 | planned in the spec |
-| AC-52 | README and AI_USAGE.md | stage 6 | planned in the spec |
+| AC-51 | secrets not in the repo | manual-pass (stage 6) | `git check-ignore .env` matches; `git grep` and the full `git log -p` have no `sk-ant` and no Gemini key (`AIza...`). `.env.example` first lacked `TOOL_TIMEOUT_S` and `DATA_DIR`; both added with empty values, checked in Docker (empty → defaults `/app/data`, 5.0) |
+| AC-52 | README and AI_USAGE.md | manual-pass (stage 6) | README has S1's 6 sections (§1-6), the 5 decisions plus separation of concerns (§7), and the SQL deviation (§3); `AI_USAGE.md` uses S1's 4 headings; README.md, AI_USAGE.md, docker-compose.yml, Dockerfile, requirements.txt, `app/`, `tests/` exist. Fresh `docker compose build --no-cache` → health ok, real "What is 2+2?" → 200, 127 tests pass in the container |
 | AC-53 | real: tip on $85 | pass | `test_ac_53_real_calculator` |
 | AC-54 | real: weather and time in London | pass | `test_ac_54_real_two_tools`; also §2 |
 | AC-55 | real: history replay | pass | `test_ac_55_real_history_replay`; also §2 "What did you calculate earlier?" |
@@ -217,7 +217,7 @@ The user ran 10 checks in Swagger (`/docs`) on the same container: health, creat
 | AC-62 | Gemini request translation | pass | `test_ac_62_gemini_request_translation` |
 | AC-63 | Gemini response mapping | pass | `test_ac_63_gemini_response_mapping` (10 cases) |
 
-**Totals:** 63 AC; 58 pass, 3 manual-pass, 2 belong to stage 6, 0 fail.
+**Totals:** 63 AC; 58 pass, 5 manual-pass (AC-48..52; AC-51 and AC-52 checked in stage 6), 0 fail.
 
 ## 5. Known limitations
 
