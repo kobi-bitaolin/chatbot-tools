@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 0.4 |
+| **Version** | 0.5 |
 | **Status** | Approved (2026-11-10) |
 | **Date** | 2026-11-10 |
 
@@ -65,7 +65,7 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 | FR-21 | **Replay rule.** Each LLM call sends the history of `complete` turns, then the new user message. Each earlier turn is replayed as: (1) the user message text; (2) for each tool round, the assistant blocks (`text` and `tool_use`, thinking removed) and the user message with the `tool_result` blocks, all taken from `llm_blocks`; (3) the final answer as one assistant text message, taken from `Message.content`. This rule is the same for every outcome (`end_turn`, `refusal`, `max_tokens`) | M | S1:41-42, D5 |
 | FR-22 | `llm_blocks` stores all of the turn's blocks exactly as received, thinking included. Thinking blocks are passed back unchanged within the turn, and removed only when building replay for later turns | M | D5 |
 | FR-23 | Only the last 20 complete turns (`MAX_HISTORY_TURNS`) may be sent. The cut is at a turn boundary, so the first message sent is always a user message | M | S1:321, D5 |
-| FR-24 | The system prompt sent must be `APP_INSTRUCTIONS + "\n\n" + (system_prompt or "You are a helpful assistant.")`, and byte-identical on every call of the conversation | M | S1:247, D0 |
+| FR-24 | The system prompt sent must be `APP_INSTRUCTIONS + "\n\n" + (system_prompt or "You are a helpful assistant.")`, and byte-identical on every call of the conversation. `APP_INSTRUCTIONS` is fixed text plus the registered tool names in registry order (NFR-12) | M | S1:247, D0 |
 
 ### LLM outcomes
 | ID | Requirement | P | Source |
@@ -106,6 +106,7 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 | NFR-9 | Testability | Automated tests use no network and no API key, and give the same result on every run (fake LLM, fixed seeds, injected clock and seed date) | S1:348, R7 |
 | NFR-10 | Data | Sample data is seeded only when `sample.db` doesn't exist, and the same seed date always gives identical data. Orders cover the 12 months before the seed date | S3 §5 |
 | NFR-11 | Submission | The repo has README.md (the 6 sections of S1:389-395 plus decisions D1-D5 and the SQL deviation), AI_USAGE.md (the S1:399-413 template), Dockerfile, docker-compose.yml, requirements.txt, code and tests | S1:374-413 |
+| NFR-12 | Maintainability | Separation of concerns: each layer of architecture §2.1 has one job, and imports go one way only (api → services → tools / llm / models). Tools import only the standard library, `jsonschema` and `app.tools`; services never import `fastapi` or `anthropic`; only `app/llm` imports `anthropic`, and it doesn't import `app.config`; the routes don't import `sqlalchemy` (except the `Session` type) or `app.models`. The chat service never sees SDK objects (it gets an `LLMResult`), and the tool names in the system prompt come from the registry | S1:30 ("well-structured") |
 
 ## 5. Data rules
 
@@ -158,6 +159,7 @@ None.
 | 0.2 | 2026-11-10 | Independent review, 17 findings applied: calculator float/finite checks and domain errors (FR-27); exact error strings (FR-25, FR-26); replay rule and `llm_blocks` structure (FR-21, FR-22); round-limit entries logged (FR-15); timeout formatting (FR-18); ordering by id/clock (FR-2, FR-3); datetime output and offsets (FR-31); `row_count` (FR-30); empty system_prompt (FR-1); FR-36 model settings; reworked AC-15, 19, 20, 26, 27, 30, 32, 36, 37, 39, 41, 43, 46, 47; added AC-57 |
 | 0.3 | 2026-11-10 | Q5 (found in the T-3 Docker smoke test, approved by the user): FR-25 also covers an LLM call that can't be made (no API key → SDK `TypeError`), which gave a 500 and a message stuck in `pending`. Added AC-58 (T-12) |
 | 0.4 | 2026-11-10 | Q7 (found while starting T-6, approved by the user): the Claude docs list `maxLength`/`minLength` and numeric limits as not supported in strict tool schemas, and `messages.create` sends schemas unchanged. FR-33: they are removed from `input_schema` only; GET /tools and executor validation keep them. AC-43 and AC-53 extended. A real-API check was prepared but not run (no API credits) |
+| 0.5 | 2026-11-10 | Separation of concerns made explicit (approved by the user while starting T-6): new NFR-12 (S1:30) with AC-59 (import boundaries, T-6; the routes/`app.models` rule from T-8), AC-60 (neutral `LLMResult`, T-7) and AC-61 (tool names in the prompt from the registry, T-6). FR-24 wording extended. Architecture §2.1 and D8 added |
 
 ---
 
@@ -274,6 +276,14 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | AC-51 | NFR-7 | `git check-ignore .env` matches; `.env.example` lists every variable with empty values; no `sk-ant` string in the repo (`git grep`) | man | stage 6 |
 | AC-52 | NFR-11 | The README has the 6 S1 sections + D1-D5 + the SQL deviation; AI_USAGE.md follows the template; the S1:376-385 files exist | man | stage 6 |
 
+### Architecture (separation of concerns)
+
+| AC | Requirement | Criterion | Level | Test |
+|---|---|---|---|---|
+| AC-59 | NFR-12 | Parsing every `app/**/*.py` with `ast` finds no forbidden import: `app/tools` imports only the standard library, `jsonschema` and `app.tools.*`; `app/services` imports no `fastapi`/`anthropic`; only `app/llm` imports `anthropic`, and `app/llm` doesn't import `app.config`; `app/api` imports no `sqlalchemy` except `sqlalchemy.orm.Session`, and (from T-8) no `app.models` | unit auto | `test_ac_59_layer_imports` |
+| AC-60 | NFR-12 | `LLMClient.complete` turns an SDK response (recorded stub) into an `LLMResult` (text, tool calls, stop reason, tokens, blocks) with no SDK types inside; the fake LLM returns `LLMResult` too | unit auto | `test_ac_60_llm_result` |
+| AC-61 | NFR-12, FR-24 | **Given** an app built with a registry holding only calculator **when** a message is sent **then** the system prompt names calculator and none of the other tools; with the full registry it names every registered tool in registry order | int auto | `test_ac_61_prompt_tools_from_registry` |
+
 ### Real-LLM checks (stage 5, risk R1/R5)
 | AC | FR | Given / When / Then | Level |
 |---|---|---|---|
@@ -320,7 +330,7 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | FR-21 | 23, 26, 55, 57 |
 | FR-22 | 24, 55 |
 | FR-23 | 25 |
-| FR-24 | 2, 3 |
+| FR-24 | 2, 3, 61 |
 | FR-25 | 26, 27, 58 |
 | FR-26 | 28, 29, 30, 57 |
 | FR-27 | 16, 31, 32 |
@@ -344,8 +354,9 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | NFR-9 | 47 |
 | NFR-10 | 36 |
 | NFR-11 | 52 |
+| NFR-12 | 59, 60, 61 |
 
-**Coverage the other way:** every AC (1-57) cites at least one FR/NFR. Every in-scope S2 requirement maps to an FR/NFR:
+**Coverage the other way:** every AC (1-61) cites at least one FR/NFR. Every in-scope S2 requirement maps to an FR/NFR:
 - REQ-1..38 and 40-42 are covered.
 - REQ-47..50 are covered by NFR-11.
 - REQ-39 and 43..46 are out of scope (§2).
@@ -357,6 +368,6 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | Every S1/S2 item is in the spec, out of scope, or open questions | Pass. REQ-1..50 mapped (§13). The 7 edge cases → AC-10, 16, 14, 17, 19, 20, 22 |
 | No placeholder text or `[NEEDS CLARIFICATION]` | Pass |
 | No vague words; numbers have units | Pass (s, chars, rows, °C) |
-| IDs unique and consistently referenced | Pass (FR-1..36, NFR-1..11, AC-1..57) |
+| IDs unique and consistently referenced | Pass (FR-1..36, NFR-1..12, AC-1..61) |
 | Each FR has an AC; each AC is testable without reading the code | Pass |
 | Independent review v0.1 (17 findings) | All applied in v0.2 (see change log) |

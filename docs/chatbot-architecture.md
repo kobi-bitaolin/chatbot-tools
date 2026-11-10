@@ -40,6 +40,24 @@ Guiding rule: keep it as small as possible and explainable line by line. The des
 | Sample DB | `app/sample_data.py` | Creates and seeds `sample.db` (section 5) |
 | Config | `app/config.py` | Settings: API key, model, effort, limits, DB paths |
 
+### 2.1 Layers and responsibilities (separation of concerns, NFR-12)
+
+Each layer has one job, so it has one reason to change.
+
+| Layer | Files | Its one job | Must not |
+|---|---|---|---|
+| HTTP | `app/api/` | Parse requests, call a service, shape the response | Hold business rules, query the DB, import `app.models` (from T-8) |
+| Validation | `app/schemas.py` | Request/response shapes, including the DB-row → response mapping (from T-8) | Touch the DB |
+| Business rules | `app/services/` | Conversations and one chat turn (orchestration) | Import `fastapi` or `anthropic`; read SDK objects |
+| LLM | `app/llm/` | Talk to the provider; turn its response into a neutral `LLMResult` (from T-7) | Import `app.config` (it gets plain values) |
+| Tools | `app/tools/` | Pure tool logic, registry, executor | Import anything from the app outside `app.tools` |
+| Data | `app/db.py`, `app/models.py` | Tables, engine, sessions | Hold rules |
+| Wiring | `app/main.py`, `app/config.py` | Read settings, build the objects, connect the layers, map service errors to HTTP codes | Hold rules |
+
+**Import direction:** api → services → (tools, llm, models). Only `app/main.py` knows every layer. `tests/test_architecture.py` (AC-59) fails on a forbidden import, so the rule holds without anyone remembering it.
+
+**Why it pays here:** switching LLM provider touches only `app/llm/`; adding a tool touches only `app/tools/` (the prompt and `GET /tools` read the registry); the fake LLM and the injected clock work because services receive their dependencies instead of creating them.
+
 ## 3. Tools
 
 ### 3.1 Shared interface
@@ -306,6 +324,7 @@ With this, all 6 required tests (S1:348-354) and every failure path can be teste
 - **C1: database tool input:** the LLM writes SQL, and the tool runs it read-only (section 3.3, D4). This is a documented deviation from S1:204.
 - **C2: limits:** tool timeout 5 s per round, max 5 tool rounds, max 20 history turns, DB row limit 100, message max 10,000 chars, expression max 200 chars, 8 executor workers.
 - **C3: refusal fallback beta:** not used (D6). Plain refusal check only.
+- **D8: no separate data-access (repository) layer (2026-11-10):** the services call the SQLAlchemy session and `commit()` themselves. At this size a repository layer would add a file per table and no real benefit; the session is still injected, so tests use temp files. Revisit if a second storage backend is ever needed.
 
 ## 14. Review log
 
