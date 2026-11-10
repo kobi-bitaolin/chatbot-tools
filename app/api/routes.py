@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app import schemas
 from app.models import Message
+from app.services import chat
 from app.services import conversations as service
 
 router = APIRouter()
@@ -28,6 +29,10 @@ def get_session(request: Request) -> Iterator[Session]:
 
 def get_clock(request: Request) -> Callable[[], datetime]:
     return request.app.state.clock
+
+
+def get_llm(request: Request):
+    return request.app.state.llm
 
 
 @router.get("/health")
@@ -95,3 +100,19 @@ def delete_conversation(conversation_id: str, session: Session = Depends(get_ses
 def reset_conversation(conversation_id: str, session: Session = Depends(get_session)):
     conversation = service.reset_conversation(session, conversation_id)
     return {"id": conversation.id, "message_count": len(conversation.messages)}
+
+
+@router.post("/conversations/{conversation_id}/messages", response_model=schemas.SendMessageResponse)
+def send_message(
+    conversation_id: str,
+    body: schemas.SendMessageRequest,  # validated before the route runs (FR-9: 422 before 404)
+    session: Session = Depends(get_session),
+    clock: Callable[[], datetime] = Depends(get_clock),
+    llm=Depends(get_llm),
+):
+    assistant = chat.send_message(session, clock, llm, conversation_id, body.content)
+    return {
+        "message": {"role": "assistant", "content": assistant.content},
+        "tools_used": assistant.tools_used,
+        "tokens_used": assistant.tokens_used,
+    }

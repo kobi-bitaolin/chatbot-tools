@@ -3,7 +3,8 @@
 Every test runs with:
 - no ANTHROPIC_API_KEY (tests must never need a real key),
 - network sockets blocked (tests must never call the internet),
-- its own temporary data folder (tests never touch real data).
+- its own temporary data folder (tests never touch real data),
+- the fake LLM in the `client` fixture (tests never reach the real LLM).
 """
 
 import socket
@@ -14,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from tests.fake_llm import FakeLLM
 
 
 class NetworkBlockedError(RuntimeError):
@@ -68,6 +70,11 @@ def settings(tmp_path):
 
 
 @pytest.fixture
-def client(settings):
-    with TestClient(create_app(settings)) as test_client:
+def fake_llm():
+    return FakeLLM()
+
+
+@pytest.fixture
+def client(settings, fake_llm):
+    with TestClient(create_app(settings, llm=fake_llm)) as test_client:
         yield test_client

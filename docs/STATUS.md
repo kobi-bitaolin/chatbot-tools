@@ -9,11 +9,11 @@
   - `docs/` is committed. `chatbot-tool.md`, `.env`, and DB files are git-ignored.
   - Remote: private repo https://github.com/kobi-bitaolin/chatbot-tools (created 2026-11-10).
   - **Standing yes (2026-11-10):** push `main` to `origin` after every merged task. Anything else (other branches, force-push, changing visibility, adding collaborators) needs a fresh yes. Make it public / share only at stage 6 with a fresh yes.
-- **Current stage:** 4b, TDD implementation, T-1..T-2 done; next T-3
+- **Current stage:** 4b, TDD implementation, T-1..T-3 done (Milestone 1); next T-4
 - **Last updated:** 2026-11-10
 
 ## Next action
-Stages 1-3 and the task list approved 2026-11-10. T-1, T-2 done. Next: T-3 (LLM client, fake LLM, basic chat) on **Opus**. Milestone 1 report after T-3.
+Stages 1-3 and the task list approved 2026-11-10. T-1..T-3 done. T-3 is committed on `feat/basic-chat`, **not merged yet**. Waiting on the Milestone 1 report: (1) yes to merge `feat/basic-chat` into `main`, push `main`, delete the branch; (2) decision on Q5. Then T-4 (calculator, **Opus**).
 
 ## Open questions
 | # | Question | Blocking? |
@@ -24,6 +24,7 @@ Stages 1-3 and the task list approved 2026-11-10. T-1, T-2 done. Next: T-3 (LLM 
 | Q3 | ~~Gap recommendations~~ All accepted | No |
 | G6, G7 | ~~DB approach, limits~~ Decided in architecture §13 | No |
 | Q4 | ~~Git init and commit style~~ Done 2026-11-10 (see Conventions) | No |
+| Q5 | No API key (or a bad auth setup): the SDK raises `TypeError` at request time, not `anthropic.APIError`, so FR-25 doesn't cover it. Today: HTTP 500 and the assistant message stays `pending` forever. Proposal: extend FR-25 so any failure to make the LLM call gives 502 "LLM service unavailable" + status `error`; add an AC; build it in T-12 | No (T-12) |
 
 ## Later, if time allows (remind the user at the end of stage 5)
 - Nice to have: custom tool registration, tool usage analytics, conversation summarization, rate limiting per tool (REQ-43..46)
@@ -37,13 +38,16 @@ See `docs/chatbot-tasks.md`.
 |---|---|
 | T-1 skeleton | done 2026-11-10 |
 | T-2 conversations | done 2026-11-10 |
-| T-3..T-13 | not started |
+| T-3 basic chat | done 2026-11-10 (branch `feat/basic-chat`, merge pending) |
+| T-4..T-13 | not started |
 
 ## AI usage log
-`docs/ai-usage-log.md` (entries so far: 1)
+`docs/ai-usage-log.md` (entries so far: 9)
 
 ## Acceptance criteria results
-- Pass: AC-1, AC-4, AC-6, AC-7, AC-45, AC-46, AC-47 (AC-8 partly: GET/DELETE/reset; send is added in T-3) (also inside Docker; early AC-49 check: suite passes in the container without a key)
+- Pass: AC-1, AC-2, AC-3, AC-4, AC-6, AC-7, AC-8, AC-9, AC-11, AC-12, AC-22, AC-45, AC-46, AC-47 (also inside Docker; early AC-49 check: suite passes in the container without a key)
+- Partly: AC-10 (shape, 1 call, `tool_choice: auto` pass; the "5 tools" check is added in T-6 when the tools exist)
+- Milestone 1 Docker smoke test (T-3): `/health` ok, create conversation ok, blank content → 422, send without a key → 500 + stuck `pending` (Q5)
 - Early Docker checks (T-1): health OK, runs as non-root `app`, writes `app.db` to the volume, `tzdata` timezones OK, healthcheck `healthy`
 - Not run yet: the rest
 

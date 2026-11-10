@@ -1,10 +1,12 @@
 """Request and response shapes of the API (Pydantic models)."""
 
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, StringConstraints, field_validator
 
 MAX_SYSTEM_PROMPT_CHARS = 4000
+MAX_CONTENT_CHARS = 10_000
 
 
 class CreateConversationRequest(BaseModel):
@@ -59,3 +61,21 @@ class ConversationDetail(BaseModel):
 class ConversationReset(BaseModel):
     id: str
     message_count: int
+
+
+class SendMessageRequest(BaseModel):
+    # FR-9: stripped first, then 1-10,000 characters (422 otherwise).
+    content: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_CONTENT_CHARS)
+    ]
+
+
+class AssistantReply(BaseModel):
+    role: str
+    content: str
+
+
+class SendMessageResponse(BaseModel):
+    message: AssistantReply
+    tools_used: list
+    tokens_used: int
