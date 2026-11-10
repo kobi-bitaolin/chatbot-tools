@@ -8,11 +8,11 @@
   - One commit per task, Conventional Commits with IDs, e.g. `feat(calculator): safe expression parser (FR-5, AC-7)`. Prefixes: feat, fix, test, docs, chore.
   - `docs/` is committed. `chatbot-tool.md`, `.env`, and DB files are git-ignored.
   - Never push without an explicit yes. Remote: private GitHub repo, not set up yet.
-- **Current stage:** 4a, task list, awaiting approval
+- **Current stage:** 4b, TDD implementation, T-1 done; next T-2
 - **Last updated:** 2026-11-10
 
 ## Next action
-Stages 1-3 approved 2026-11-10. Task list `docs/chatbot-tasks.md` (T-1..T-13) awaiting approval. Then T-1 (skeleton) on Sonnet.
+Stages 1-3 and the task list approved 2026-11-10. T-1 done. Next: T-2 (data model + conversation endpoints), recommended model Sonnet.
 
 ## Open questions
 | # | Question | Blocking? |
@@ -30,14 +30,22 @@ Stages 1-3 approved 2026-11-10. Task list `docs/chatbot-tasks.md` (T-1..T-13) aw
 - Streaming responses (REQ-39)
 
 ## Tasks
-See `docs/chatbot-tasks.md`. All 13 tasks: not started.
+See `docs/chatbot-tasks.md`.
+
+| Task | Status |
+|---|---|
+| T-1 skeleton | done 2026-11-10 |
+| T-2..T-13 | not started |
 
 ## AI usage log
 `docs/ai-usage-log.md` (entries so far: 1)
 
 ## Acceptance criteria results
-None yet.
+- Pass: AC-45, AC-47 (also inside Docker; early AC-49 check: suite passes in the container without a key)
+- Early Docker checks (T-1): health OK, runs as non-root `app`, writes `app.db` to the volume, `tzdata` timezones OK, healthcheck `healthy`
+- Not run yet: the rest
 
 ## Decisions and changes since spec approval
 | Date | Change | Spec version | Affected IDs |
 |---|---|---|---|
+| 2026-11-10 | Host port made configurable (`API_PORT`, default 8000) because port 8000 was taken on this machine. Deployment detail only, no behavior change | 0.2 | NFR-2 (AC-48 uses `API_PORT` if 8000 is taken) |

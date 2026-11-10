@@ -1,0 +1,10 @@
+.git
+.venv
+.env
+.env.*
+!.env.example
+data/
+docs/
+**/__pycache__
+.pytest_cache
+chatbot-tool.md
