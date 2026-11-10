@@ -1,0 +1,9 @@
+# Store and check out text files with LF line endings (the Docker container runs Linux)
+* text=auto eol=lf
+
+# Binary files: never touch line endings
+*.png binary
+*.jpg binary
+*.ico binary
+*.db binary
+*.sqlite binary
