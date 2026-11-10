@@ -9,11 +9,12 @@
   - `docs/` is committed. `chatbot-tool.md`, `.env`, and DB files are git-ignored.
   - Remote: private repo https://github.com/kobi-bitaolin/chatbot-tools (created 2026-11-10).
   - **Standing yes (2026-11-10):** push `main` to `origin` after every merged task. Anything else (other branches, force-push, changing visibility, adding collaborators) needs a fresh yes. Make it public / share only at stage 6 with a fresh yes.
+  - **Merges need a yes per task** (2026-11-10: the user declined a standing yes for merge + branch delete).
 - **Current stage:** 4b, TDD implementation, T-1..T-4 done; next T-5
 - **Last updated:** 2026-11-10
 
 ## Next action
-Stages 1-3 and the task list approved 2026-11-10. T-1..T-3 done and merged; Milestone 1 approved 2026-11-10. T-4 committed on `feat/calculator`, merge waiting for a yes. Next: T-5 (web search and weather mocks, Sonnet).
+Stages 1-3 and the task list approved 2026-11-10. T-1..T-3 done and merged; Milestone 1 approved 2026-11-10. T-4 done and merged. Next: T-5 (web search and weather mocks, Sonnet).
 
 ## Open questions
 | # | Question | Blocking? |
@@ -40,7 +41,7 @@ See `docs/chatbot-tasks.md`.
 | T-1 skeleton | done 2026-11-10 |
 | T-2 conversations | done 2026-11-10 |
 | T-3 basic chat | done 2026-11-10 |
-| T-4 calculator | done 2026-11-10 (branch `feat/calculator`, merge pending) |
+| T-4 calculator | done 2026-11-10 |
 | T-5..T-13 | not started |
 
 ## AI usage log
