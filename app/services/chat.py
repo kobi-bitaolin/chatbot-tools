@@ -19,6 +19,7 @@ from app.tools.executor import ToolCall, ToolExecutor, ToolResult
 from app.tools.registry import ToolRegistry
 
 DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
+MAX_HISTORY_TURNS = 20  # FR-23
 
 
 def build_app_instructions(tool_names: list[str]) -> str:
@@ -45,6 +46,33 @@ def build_system_prompt(tool_names: list[str], system_prompt: str | None) -> str
     return build_app_instructions(tool_names) + "\n\n" + (system_prompt or DEFAULT_SYSTEM_PROMPT)
 
 
+def build_history(messages: list[Message]) -> list[dict]:
+    """FR-21, FR-23: the earlier turns, ready to send before the new user message.
+
+    `messages` is the conversation in order. A turn is a user message plus
+    the assistant message right after it; only `complete` turns are replayed
+    (a failed turn is skipped, user message included). Only the last
+    MAX_HISTORY_TURNS turns are kept, so the cut is always at a turn
+    boundary and the first message sent is a user message.
+    """
+    turns = [
+        (user, assistant)
+        for user, assistant in zip(messages, messages[1:])
+        if user.role == "user" and assistant.role == "assistant" and assistant.status == "complete"
+    ]
+    history = []
+    for user, assistant in turns[-MAX_HISTORY_TURNS:]:
+        history.append({"role": "user", "content": user.content})
+        # The tool rounds: every stored message except the final answer,
+        # with thinking removed (FR-22: it is only passed back within its turn).
+        for message in assistant.llm_blocks[:-1]:
+            blocks = [b for b in message["content"] if b["type"] != "thinking"]
+            history.append({"role": message["role"], "content": blocks})
+        # The final answer as plain text, the same for every stop reason.
+        history.append({"role": "assistant", "content": assistant.content})
+    return history
+
+
 def tool_result_block(call_id: str, result: ToolResult) -> dict:
     """One result for the LLM, paired with its call by `tool_use_id` (FR-13, FR-16)."""
     if result.success:
@@ -63,6 +91,7 @@ def send_message(
 ) -> Message:
     """Run one turn and return the finished assistant message."""
     conversation = get_conversation(session, conversation_id)  # 404 if missing
+    history = build_history(conversation.messages)  # before this turn's messages are added
 
     # Save the user message and a "pending" assistant message first, so the
     # turn is visible (and its tool runs can be linked) even if the LLM fails.
@@ -77,9 +106,8 @@ def send_message(
 
     system = build_system_prompt(registry.names(), conversation.system_prompt)
     tools = registry.api_definitions()
-    # FR-20: history replay is added in T-8, so for now the turn starts with
-    # the new user message only (which is exactly FR-20 for a first message).
-    messages = [{"role": "user", "content": content}]
+    # FR-20, FR-21: earlier turns first, then the new user message.
+    messages = history + [{"role": "user", "content": content}]
     turn_blocks: list[dict] = []  # everything after the user message, for llm_blocks
     tools_used: list[dict] = []
     tokens_used = 0
