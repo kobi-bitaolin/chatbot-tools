@@ -8,11 +8,11 @@
   - One commit per task, Conventional Commits with IDs, e.g. `feat(calculator): safe expression parser (FR-5, AC-7)`. Prefixes: feat, fix, test, docs, chore.
   - `docs/` is committed. `chatbot-tool.md`, `.env`, and DB files are git-ignored.
   - Never push without an explicit yes. Remote: private GitHub repo, not set up yet.
-- **Current stage:** 1, requirements intake, awaiting answers and approval
+- **Current stage:** 2, architecture, awaiting approval (choices C1-C3)
 - **Last updated:** 2026-11-10
 
 ## Next action
-All stage 1 questions answered. User approves `docs/chatbot-requirements.md`, then stage 2 (architecture).
+Stage 1 approved 2026-11-10. User reviews `docs/chatbot-architecture.md`, answers C1-C3 and approves. Then stage 3 (spec and test plan).
 
 ## Open questions
 | # | Question | Blocking? |
