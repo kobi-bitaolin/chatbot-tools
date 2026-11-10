@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 0.1 |
+| **Version** | 0.2 |
 | **Status** | Draft |
 | **Date** | 2026-11-10 |
 
@@ -34,9 +34,9 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 ### Conversations
 | ID | Requirement | P | Source |
 |---|---|---|---|
-| FR-1 | `POST /conversations` with an optional `system_prompt` must create a conversation and return 201 `{id, created_at}`. `id` must be `conv_` + 12 lowercase hex characters | M | S1:243-254, G12 |
-| FR-2 | `GET /conversations` must return every conversation as `{id, created_at, last_message_at, message_count}`, newest first | M | S1:68, G1 |
-| FR-3 | `GET /conversations/{id}` must return `{id, system_prompt, created_at, messages}`, with messages in chronological order. Assistant messages include `status`, `tools_used` and `tokens_used` | M | S1:256-268, S3 §6 |
+| FR-1 | `POST /conversations` with an optional `system_prompt` must create a conversation and return 201 `{id, created_at}`. `id` must be `conv_` + 12 lowercase hex characters. `system_prompt` is stripped; an empty or spaces-only value is stored as null (the default is used) | M | S1:243-254, G12 |
+| FR-2 | `GET /conversations` must return every conversation as `{id, created_at, last_message_at, message_count}`, ordered by `created_at` descending (newest first) | M | S1:68, G1 |
+| FR-3 | `GET /conversations/{id}` must return `{id, system_prompt, created_at, messages}`. Messages are ordered by their database id (insertion order, never tied). Each message has `role`, `content` and `created_at`. Assistant messages also have `status`, `tools_used` and `tokens_used`. Messages with status `error` are shown | M | S1:256-268, S3 §6 |
 | FR-4 | `DELETE /conversations/{id}` must return 204 and remove the conversation, its messages and its tool executions | M | S1:70, G1, S3 §5 |
 | FR-5 | `POST /conversations/{id}/reset` must remove all messages and tool executions, keep the conversation and its system prompt, and return 200 `{id, message_count: 0}` | M | S1:43, G1 |
 | FR-6 | An unknown conversation id must return 404 on GET, DELETE, reset and send | M | S3 §4 |
@@ -52,37 +52,38 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 | FR-12 | When the LLM requests tools, the system must run them, send the results back, and repeat until the LLM gives a final answer | M | S1:59-63 |
 | FR-13 | All tool calls of one round must run, and their results must go back to the LLM in **one** user message, **in the order the LLM requested them**. `tools_used` must use the same order | M | S1:329, D2, S3 §3.2 |
 | FR-14 | Each `tools_used` item must be `{tool, input, output, success, error, execution_time_ms}`. `output` is null and `error` is text on failure; `output` is set and `error` is null on success | M | S1:121-131, G3 |
-| FR-15 | After 5 tool rounds, if the LLM requests tools again, those calls must not run. Each must get the error result "Tool call limit reached", and one final LLM call must be made with `tool_choice: none` | M | S1:332, S3 §4 |
+| FR-15 | After 5 tool rounds, if the LLM requests tools again, those calls must not run. Each must get the error result "Tool call limit reached" (`success: false`, `execution_time_ms: 0`), be included in `tools_used` and logged as a ToolExecution, and one final LLM call must be made with `tool_choice: none` | M | S1:332, S3 §4 |
 | FR-16 | A tool error, an invalid input, an unknown tool name or a timeout must never fail the request. The result must go to the LLM with `is_error: true` and the error text | M | S1:328, S1:330, D3 |
 | FR-17 | Tool input must be validated against the tool's JSON Schema, plus the per-operation datetime checks, before running. A failure gives an error result starting with "Invalid input:" | S | S1:330, S1:360 |
-| FR-18 | The tools of one round share a deadline of `TOOL_TIMEOUT_S` (default 5). A call still running at the deadline gets the error "Timed out after {N}s". Other calls in the round keep their results | S | S1:331, S1:359, G9 |
+| FR-18 | The tools of one round share a deadline of `TOOL_TIMEOUT_S` (default 5). A call still running at the deadline gets the error "Timed out after {N}s", where N is formatted with Python's `{:g}` (5.0 → "5", 0.5 → "0.5"). Other calls in the round keep their results | S | S1:331, S1:359, G9 |
 | FR-19 | `tokens_used` must be the sum of `input_tokens + output_tokens` over all LLM calls of the turn, stored on the assistant message | S | S1:162, S1:361, D7 |
 | FR-20 | The first message of a new or reset conversation must be sent to the LLM as the only message | M | S1:333 |
 
 ### History and context
 | ID | Requirement | P | Source |
 |---|---|---|---|
-| FR-21 | Each LLM call must send, in order: the stored history of `complete` turns (user message, then the turn's stored assistant and tool blocks) and then the new user message | M | S1:41-42, D5 |
-| FR-22 | Thinking blocks must be passed back unchanged within a turn, and must not be sent for earlier turns | M | D5 |
+| FR-21 | **Replay rule.** Each LLM call sends the history of `complete` turns, then the new user message. Each earlier turn is replayed as: (1) the user message text; (2) for each tool round, the assistant blocks (`text` and `tool_use`, thinking removed) and the user message with the `tool_result` blocks, all taken from `llm_blocks`; (3) the final answer as one assistant text message, taken from `Message.content`. This rule is the same for every outcome (`end_turn`, `refusal`, `max_tokens`) | M | S1:41-42, D5 |
+| FR-22 | `llm_blocks` stores all of the turn's blocks exactly as received, thinking included. Thinking blocks are passed back unchanged within the turn, and removed only when building replay for later turns | M | D5 |
 | FR-23 | Only the last 20 complete turns (`MAX_HISTORY_TURNS`) may be sent. The cut is at a turn boundary, so the first message sent is always a user message | M | S1:321, D5 |
 | FR-24 | The system prompt sent must be `APP_INSTRUCTIONS + "\n\n" + (system_prompt or "You are a helpful assistant.")`, and byte-identical on every call of the conversation | M | S1:247, D0 |
 
 ### LLM outcomes
 | ID | Requirement | P | Source |
 |---|---|---|---|
-| FR-25 | If the LLM call fails after the SDK's retries, the API must return 502 `{"detail": "LLM service unavailable"}` and set the assistant message `status` to `error`. Tool executions already run stay logged | M | S3 §4 |
-| FR-26 | `stop_reason` handling: `refusal` → content "I can't help with that request." (status `complete`). `max_tokens` → the text so far + " [response cut off]" (status `complete`). Any other unexpected value → 502, status `error` | M | S3 §4 step 5 |
+| FR-25 | If an LLM call raises any `anthropic.APIError` (connection, timeout, rate limit or HTTP status error, after the SDK's retries), the API must return 502 `{"detail": "LLM service unavailable"}`. The assistant message gets status `error` and content "LLM service unavailable". Tool executions already run stay logged. The original error is written to the server log | M | S3 §4 |
+| FR-26 | `stop_reason` handling: `end_turn` → content = the text blocks joined (status `complete`). `refusal` → content "I can't help with that request." (status `complete`). `max_tokens` → the text so far + " [response cut off]" (status `complete`). Any other value → 502 `{"detail": "Unexpected LLM response"}`, with status `error` and content "Unexpected LLM response" | M | S3 §4 step 5 |
 
 ### Tools
 | ID | Requirement | P | Source |
 |---|---|---|---|
-| FR-27 | **Calculator** evaluates `expression` safely (an `ast` whitelist, `^` = power) and returns `{"result": float}`. Errors: "Invalid expression", "Division by zero", "Exponent too large", "Result too large" | M | S1:170-181, D4 |
+| FR-27 | **Calculator** evaluates `expression` safely (an `ast` whitelist, `^` = power) and returns `{"result": float}`. **All numbers are converted to float**, and after every operation and function call a result that isn't finite (inf/nan) gives "Result too large", as does `OverflowError`. Errors: "Invalid expression" (syntax, a non-whitelisted node or name, a wrong argument count, math domain errors such as `sqrt(-1)` or `log(0)`), "Division by zero", "Exponent too large" (absolute exponent > 1000), "Result too large" | M | S1:170-181, D4 |
 | FR-28 | **Web search** (mock) returns `{"results": [{title, snippet, url}]}` for queries that match predefined keywords, and `{"results": []}` otherwise | M | S1:183-190, G5 |
 | FR-29 | **Weather** (mock) returns `{location, temperature (°C, integer -30..45), condition (one of sunny/cloudy/rainy/snowy/windy/foggy), humidity (integer 0..100)}`, from an injectable random generator | M | S1:192-199 |
-| FR-30 | **Database query** runs one read-only SELECT on `sample.db` and returns `{columns, rows, row_count, truncated}`. It returns at most 100 rows, and `truncated` is true if more exist | M | S1:201-208, C1, D4 |
-| FR-31 | **Date/time** supports `current` (optional `timezone`, default UTC), `convert` (`datetime`, `from_tz`, `to_tz`) and `calculate` (`datetime` + at least one of `days`/`hours`/`minutes`, which may be negative). The result is ISO 8601: with offset when a timezone is known (`current`, `convert`, or a `calculate` input that has an offset), without offset for a `calculate` input without one. Unknown timezone → "Unknown timezone: X" | M | S1:210-219 |
+| FR-30 | **Database query** runs one read-only SELECT on `sample.db` and returns `{columns, rows, row_count, truncated}`. It returns at most 100 rows. `row_count` is the number of rows returned, and `truncated` is true if more exist | M | S1:201-208, C1, D4 |
+| FR-31 | **Date/time** supports `current` (optional `timezone`, default UTC), `convert` (`datetime`, `from_tz`, `to_tz`) and `calculate` (`datetime` + at least one of `days`/`hours`/`minutes`, which may be negative). The output is `{"result": "<ISO 8601>"}` only: with offset when a timezone is known (`current`, `convert`, or a `calculate` input that has an offset), without offset for a `calculate` input without one. For `convert`, `datetime` must have no offset (`from_tz` defines it); an input with an offset gives "Invalid input: datetime must not include an offset for convert". Unknown timezone → "Unknown timezone: X" | M | S1:210-219 |
 | FR-32 | `GET /tools` must return `{"tools": [{name, description, parameters}]}` for all 5 tools, with `parameters` in the S1:102-119 format | M | S1:270-280 |
 | FR-33 | Tool definitions sent to the LLM must use `input_schema` (the same schema), with `additionalProperties: false` and `strict: true` | M | S3 §3.1 |
+| FR-36 | Every LLM request must use `model` = `LLM_MODEL` (default `claude-opus-5-5`), `max_tokens` 16,000, `thinking: {type: "adaptive"}`, and `output_config.effort` = `LLM_EFFORT` (default `medium`) | M | D6 |
 
 ### Logging and health
 | ID | Requirement | P | Source |
@@ -111,14 +112,14 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 | Entity.field | Type | Required | Rule |
 |---|---|---|---|
 | Conversation.id | str | yes | `^conv_[0-9a-f]{12}$`, unique |
-| Conversation.system_prompt | text | no | ≤ 4,000 chars (422 otherwise) |
+| Conversation.system_prompt | text | no | stripped; empty → null; ≤ 4,000 chars (422 otherwise) |
 | Conversation.created_at / last_message_at | datetime UTC | yes / no | ISO 8601 in the API |
 | Message.role | str | yes | `user` or `assistant` (`system` allowed, not used) |
-| Message.content | text | yes | user: 1-10,000 chars after stripping |
+| Message.content | text | yes | user: 1-10,000 chars after stripping. Assistant: the final answer (FR-26), "" while pending, or the error text (FR-25/26) |
 | Message.status | str | assistant only | `pending` / `complete` / `error` |
 | Message.tools_used | JSON | no | list of FR-14 items |
 | Message.tokens_used | int | no | ≥ 0 |
-| Message.llm_blocks | JSON | no | the turn's raw assistant and tool_result blocks. Not exposed in the API |
+| Message.llm_blocks | JSON | no | a list of the turn's messages after the user message, exactly as sent and received: `[{role: "assistant", content: [blocks incl. thinking]}, {role: "user", content: [tool_result blocks]}, ..., {role: "assistant", content: [final blocks]}]`. Not exposed in the API. Replay follows FR-21 |
 | ToolExecution.tool_name | str | yes | one of the 5 tool names, or the name the LLM sent (unknown tool) |
 | ToolExecution.input / output | JSON | yes / no | |
 | ToolExecution.success | bool | yes | |
@@ -154,6 +155,7 @@ None.
 | Version | Date | Change |
 |---|---|---|
 | 0.1 | 2026-11-10 | First draft from S1-S3 |
+| 0.2 | 2026-11-10 | Independent review, 17 findings applied: calculator float/finite checks and domain errors (FR-27); exact error strings (FR-25, FR-26); replay rule and `llm_blocks` structure (FR-21, FR-22); round-limit entries logged (FR-15); timeout formatting (FR-18); ordering by id/clock (FR-2, FR-3); datetime output and offsets (FR-31); `row_count` (FR-30); empty system_prompt (FR-1); FR-36 model settings; reworked AC-15, 19, 20, 26, 27, 30, 32, 36, 37, 39, 41, 43, 46, 47; added AC-57 |
 
 ---
 
@@ -169,10 +171,12 @@ None.
 **Controls**
 - The fake LLM (S3 §11) returns scripted blocks and stop reasons and records requests.
 - Weather uses `random.Random(42)`.
-- The clock is injected as `2026-11-10T12:00:00Z`.
+- The clock is injected as `2026-11-10T12:00:00Z`. For ordering tests it's a ticking clock that adds 1 s per call.
 - Seed date `2026-11-10` and seed 7.
-- `TOOL_TIMEOUT_S = 0.5` in timeout tests.
+- `TOOL_TIMEOUT_S = 1.0` in timeout tests. A "slow tool" is made by monkeypatching a real tool's `run` to wait on a `threading.Event`, which the test sets at teardown, so no thread is left running. No extra tool is registered, so there are always 5 tools.
+- The app is built by `create_app(settings)`, so tests can build it with temporary files and build it a second time on the same files (restart test).
 - `sample.db` and `app.db` go in the pytest `tmp_path`.
+- `conftest.py` unsets `ANTHROPIC_API_KEY` and blocks network sockets for every test.
 
 **Commands**
 - All tests: `pytest`
@@ -194,10 +198,10 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | AC | FR/NFR | Given / When / Then | Level | Test |
 |---|---|---|---|---|
 | AC-1 | FR-1 | **When** `POST /conversations {}` **then** 201, `id` matches `^conv_[0-9a-f]{12}$`, `created_at` is ISO 8601; a 4,001-char system_prompt → 422 | int auto | `test_ac_1_create_conversation` |
-| AC-2 | FR-1, FR-24 | **Given** no system_prompt **when** a message is sent **then** the fake received system = APP_INSTRUCTIONS + "\n\nYou are a helpful assistant." | int auto | `test_ac_2_default_system_prompt` |
+| AC-2 | FR-1, FR-24 | **Given** no system_prompt, and separately system_prompt "   " **when** a message is sent **then** in both cases the fake received system = APP_INSTRUCTIONS + "\n\nYou are a helpful assistant.", and GET shows `system_prompt: null` | int auto | `test_ac_2_default_system_prompt` |
 | AC-3 | FR-24 | **Given** system_prompt "Answer in French." **when** 2 turns are sent **then** both LLM requests have the identical system string ending in "Answer in French." | int auto | `test_ac_3_system_prompt_stable` |
-| AC-4 | FR-2 | **Given** conversations A then B **when** `GET /conversations` **then** [B, A] with `message_count` 0 and `last_message_at` null | int auto | `test_ac_4_list_conversations` |
-| AC-5 | FR-3 | **Given** a turn with one tool **when** `GET /conversations/{id}` **then** messages = [user, assistant], and the assistant has `status: complete`, `tools_used` (1 item) and `tokens_used` | int auto | `test_ac_5_get_history` |
+| AC-4 | FR-2 | **Given** a ticking clock, and conversations A then B **when** `GET /conversations` **then** [B, A] with `message_count` 0 and `last_message_at` null | int auto | `test_ac_4_list_conversations` |
+| AC-5 | FR-3 | **Given** a turn with one tool **when** `GET /conversations/{id}` **then** messages = [user, assistant], each with `created_at`, and the assistant has `status: complete`, `tools_used` (1 item) and `tokens_used` | int auto | `test_ac_5_get_history` |
 | AC-6 | FR-4 | **Given** a conversation with a tool turn **when** DELETE **then** 204; GET → 404; 0 Message and 0 ToolExecution rows remain for it | int auto | `test_ac_6_delete_cascades` |
 | AC-7 | FR-5 | **Given** system_prompt "X" and 2 turns **when** reset **then** 200 `{id, message_count: 0}`; GET shows `messages: []` and system_prompt "X"; 0 ToolExecution rows | int auto | `test_ac_7_reset` |
 | AC-8 | FR-6 | **When** GET, DELETE, reset, send on `conv_000000000000` **then** each returns 404 | int auto | `test_ac_8_unknown_conversation_404` |
@@ -209,14 +213,14 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | AC-10 | FR-8, FR-11, FR-10 | **Required test 1 (basic chat).** **Given** fake returns text "Hello!" with `end_turn` **when** "Hi" is sent **then** 200 `{message: {role: assistant, content: "Hello!"}, tools_used: [], tokens_used}`; exactly 1 LLM call, with 5 tools and `tool_choice: auto` | int auto | `test_ac_10_basic_chat_no_tools` |
 | AC-11 | FR-9 | **When** content is "", "   " or 10,001 chars **then** 422 | int auto | `test_ac_11_content_validation` |
 | AC-12 | FR-9 | **When** an invalid body is sent to an unknown id **then** 422 (not 404) | int auto | `test_ac_12_validation_before_404` |
-| AC-13 | FR-12, FR-14 | **Required test 2 (single tool).** **Given** fake returns tool_use calculator `{"expression": "25/100*180"}`, then text "45" **when** "What's 25% of 180?" is sent **then** 200, content "45", `tools_used = [{tool: calculator, input: {...}, output: {result: 45.0}, success: true, error: null, execution_time_ms ≥ 0}]`; 2 LLM calls; the 2nd request ends with a user message holding 1 tool_result | int auto | `test_ac_13_single_tool` |
-| AC-14 | FR-13 | **Required test 3 (multiple tools).** **Given** fake returns one response with tool_use weather `{"location": "Tokyo"}` and calculator `{"expression": "85*0.15"}`, then text **when** sent **then** both run; the 2nd LLM request has ONE user message with 2 tool_results in that order; `tools_used` = [weather, calculator], both success; calculator output 12.75 | int auto | `test_ac_14_multiple_tools` |
-| AC-15 | FR-13 | **Given** two calls where the first is slower (a fake slow tool 0.2 s, then a fast one) **then** `tools_used` and tool_results keep request order | int auto | `test_ac_15_result_order` |
+| AC-13 | FR-12, FR-14 | **Required test 2 (single tool).** **Given** fake returns tool_use calculator `{"expression": "25/100*180"}`, then text "45" **when** "What's 25% of 180?" is sent **then** 200, content "45", `tools_used = [{tool: calculator, input: {...}, output: {result: 45.0}, success: true, error: null, execution_time_ms ≥ 0}]`; 2 LLM calls; the 2nd request ends with a user message holding 1 tool_result whose `tool_use_id` equals the tool_use block's `id` | int auto | `test_ac_13_single_tool` |
+| AC-14 | FR-13 | **Required test 3 (multiple tools).** **Given** fake returns one response with tool_use weather `{"location": "Tokyo"}` (id "tu_1") and calculator `{"expression": "85*0.15"}` (id "tu_2"), then text **when** sent **then** both run; the 2nd LLM request has ONE user message with 2 tool_results with `tool_use_id` "tu_1", "tu_2" in that order; `tools_used` = [weather, calculator], both success; calculator output 12.75 | int auto | `test_ac_14_multiple_tools` |
+| AC-15 | FR-13 | **Given** weather's `run` patched to wait 0.2 s, and one response requesting weather then calculator **then** `tools_used` and tool_results are [weather, calculator] (request order, although calculator finishes first) | int auto | `test_ac_15_result_order` |
 | AC-16 | FR-16, FR-27 | **Required test 4 (tool error).** **Given** fake requests calculator `{"expression": "1/0"}`, then text **then** 200; `tools_used[0]` has success false, output null, error "Division by zero"; the 2nd LLM request's tool_result has `is_error: true` and content containing "Division by zero" | int auto | `test_ac_16_tool_error_handled` |
 | AC-17 | FR-16, FR-17 | **Given** fake requests calculator `{"expr": "1"}` **then** an error result starting "Invalid input:"; request 200 | int auto | `test_ac_17_invalid_params` |
 | AC-18 | FR-16 | **Given** fake requests tool `teleport` **then** error "Unknown tool: teleport"; request 200 | int auto | `test_ac_18_unknown_tool` |
-| AC-19 | FR-18, NFR-8 | **Given** `TOOL_TIMEOUT_S=0.5`, a fake tool sleeping 5 s and calculator `2+2` in one round **then** the whole request (the fake LLM answers instantly) takes < 0.75 s; the slow call has error "Timed out after 0.5s"; the calculator has result 4.0 (partial results) | int auto | `test_ac_19_timeout_partial_results` |
-| AC-20 | FR-15 | **Given** fake returns tool_use calculator 6 times, then text **then** 5 tool rounds run; the 6th response's call gets the error "Tool call limit reached" without running; the 7th LLM call has `tool_choice: none`; 200 with the final text; 7 LLM calls in total | int auto | `test_ac_20_round_limit` |
+| AC-19 | FR-18, FR-34, NFR-8 | **Given** `TOOL_TIMEOUT_S=1.0`, weather's `run` patched to block on an Event (released at teardown), and one response requesting weather and calculator `2+2` **then** the whole request takes < 1.5 s; weather has success false and error "Timed out after 1s"; calculator has result 4.0 (partial results); 2 ToolExecution rows, the weather one with success false | int auto | `test_ac_19_timeout_partial_results` |
+| AC-20 | FR-15, FR-34 | **Given** fake returns tool_use calculator `1+1` 6 times, then text **then** 5 tool rounds run; the 6th response's call gets the error "Tool call limit reached" without running; the 7th LLM call has `tool_choice: none`; 200 with the final text; 7 LLM calls in total; `tools_used` has 6 items, the 6th with success false and `execution_time_ms` 0; 6 ToolExecution rows | int auto | `test_ac_20_round_limit` |
 | AC-21 | FR-19 | **Given** fake usages (10 in, 5 out) then (20 in, 7 out) **then** `tokens_used` = 42 in the response and in history | int auto | `test_ac_21_token_sum` |
 | AC-22 | FR-20 | **Given** a new conversation **when** the first message is sent **then** the LLM request `messages` = [that user message] only | int auto | `test_ac_22_first_message` |
 
@@ -224,42 +228,43 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | AC | FR/NFR | Given / When / Then | Level | Test |
 |---|---|---|---|---|
 | AC-23 | FR-21, FR-3 | **Required test 5 (conversation history).** **Given** turn 1 used weather for Paris **when** turn 2 "And is that warm?" is sent **then** the turn 2 request has, in order: turn-1 user, turn-1 assistant with tool_use, user with tool_result, turn-1 final assistant text, then the turn-2 user message; GET history shows 4 messages in order | int auto | `test_ac_23_multi_turn_history` |
-| AC-24 | FR-22 | **Given** fake round 1 returns [thinking(signature "sig1"), tool_use] **then** the round 2 request contains that thinking block unchanged; **and** the next turn's request contains no thinking blocks | int auto | `test_ac_24_thinking_blocks` |
+| AC-24 | FR-22 | **Given** fake round 1 returns [thinking(signature "sig1"), tool_use] **then** the round 2 request contains that thinking block unchanged; the stored `llm_blocks` still contains it; **and** the next turn's request contains no thinking blocks | int auto | `test_ac_24_thinking_blocks` |
 | AC-25 | FR-23 | **Given** 25 complete turns stored **when** turn 26 is sent **then** the request has turns 6-25 plus the new message, and its first message has role user | int auto | `test_ac_25_history_trim` |
-| AC-26 | FR-21, FR-25 | **Given** turn 1 failed (502) **when** turn 2 is sent **then** the request contains only turn 2's user message | int auto | `test_ac_26_failed_turn_skipped` |
+| AC-26 | FR-21, FR-25, FR-3 | **Given** turn 1 failed (502) **when** turn 2 is sent **then** the request contains only turn 2's user message; GET history still shows turn 1's assistant message with status `error` and content "LLM service unavailable" | int auto | `test_ac_26_failed_turn_skipped` |
 
 ### LLM outcomes
 | AC | FR/NFR | Given / When / Then | Level | Test |
 |---|---|---|---|---|
-| AC-27 | FR-25, FR-34 | **Given** fake round 1 requests calculator, and round 2 raises an SDK connection error **then** 502 `{"detail": "LLM service unavailable"}`; assistant status `error`; 1 ToolExecution row is still saved | int auto | `test_ac_27_llm_failure_502` |
+| AC-27 | FR-25, FR-34 | **Given** fake round 1 requests calculator, and round 2 raises an SDK connection error **then** 502 `{"detail": "LLM service unavailable"}`; the assistant message has status `error` and content "LLM service unavailable"; 1 ToolExecution row is still saved | int auto | `test_ac_27_llm_failure_502` |
 | AC-28 | FR-26 | **Given** fake stop_reason `refusal` **then** 200, content "I can't help with that request.", status complete | int auto | `test_ac_28_refusal` |
 | AC-29 | FR-26 | **Given** fake text "Partial" with `max_tokens` **then** content "Partial [response cut off]" | int auto | `test_ac_29_max_tokens` |
-| AC-30 | FR-26 | **Given** fake stop_reason `weird_value` **then** 502; status `error` | int auto | `test_ac_30_unexpected_stop` |
+| AC-30 | FR-26 | **Given** fake stop_reason `weird_value` **then** 502 `{"detail": "Unexpected LLM response"}`; status `error`, content "Unexpected LLM response" | int auto | `test_ac_30_unexpected_stop` |
+| AC-57 | FR-21, FR-26 | **Given** turn 1 ended with `refusal` **when** turn 2 is sent **then** the request has: turn-1 user text, an assistant text message "I can't help with that request.", then the turn-2 user message | int auto | `test_ac_57_replay_refusal_turn` |
 
 ### Tools (unit)
 | AC | FR/NFR | Given / When / Then | Level | Test |
 |---|---|---|---|---|
 | AC-31 | FR-27 | `"2 + 2"`→4.0; `"sqrt(16)"`→4.0; `"sin(3.14159/2)"`→1.0 (±1e-5); `"100 * (1 + 0.05)^10"`→162.889 (±0.001); `"sqrt(144) + 5"`→17.0 | unit auto | `test_ac_31_calculator_examples` |
-| AC-32 | FR-27 | `"1/0"`→"Division by zero"; `"2 +"`→"Invalid expression"; `"9**9**9"`→"Exponent too large"; `"10.0**400"`→"Result too large" | unit auto | `test_ac_32_calculator_errors` |
+| AC-32 | FR-27 | `"1/0"`→"Division by zero"; `"2 +"`, `"sqrt(-1)"`, `"log(0)"`, `"sqrt(1, 2)"`→"Invalid expression"; `"9**9**9"`→"Exponent too large"; `"10.0**400"`, `"1e999"`, `"1e308*10"`, `"((2**1000)**1000)**1000"`→"Result too large"; every result is JSON-serialisable (no inf/nan) | unit auto | `test_ac_32_calculator_errors` |
 | AC-33 | NFR-5 | `"__import__('os')"`, `"().__class__"`, `"open('x')"`, `"a+1"` → "Invalid expression"; a 201-char expression → "Invalid input:" (through the executor); the module source contains no `eval(` or `exec(` | unit auto | `test_ac_33_calculator_security` |
 | AC-34 | FR-28 | `"python"`→ ≥1 result, each with title/snippet/url; `"zzqx"`→`[]` | unit auto | `test_ac_34_web_search` |
 | AC-35 | FR-29 | With `Random(42)`: same output on two calls with fresh generators; temperature, condition and humidity within FR-29 ranges over 100 calls | unit auto | `test_ac_35_weather` |
-| AC-36 | FR-30, NFR-10 | Seed date 2026-11-10: "orders last month" SQL returns `row_count` 1 with count > 0; seeding twice gives identical counts; all `order_date` within 2025-11-10..2026-11-10 | unit auto | `test_ac_36_database_query` |
-| AC-37 | FR-30 | `SELECT * FROM orders` → 100 rows, `truncated: true` | unit auto | `test_ac_37_database_row_limit` |
+| AC-36 | FR-30, NFR-10 | Seed date 2026-11-10, seed 7: `SELECT COUNT(*) FROM orders WHERE order_date >= '2026-10-01' AND order_date < '2026-11-01'` (literal dates, never `date('now')` in tests) returns one row with the exact golden count. The count is computed once when the seeder is written and fixed in the test, so the test fails if the seed data changes. Seeding twice gives identical data, and all `order_date` are within 2025-11-10..2026-11-10 | unit auto | `test_ac_36_database_query` |
+| AC-37 | FR-30 | `SELECT * FROM orders` → 100 rows, `row_count` 100, `truncated: true` | unit auto | `test_ac_37_database_row_limit` |
 | AC-38 | NFR-6 | INSERT, UPDATE, DELETE, DROP TABLE, CREATE TABLE, ATTACH, PRAGMA, `SELECT 1; SELECT 2`, and `SELECT * FROM conversations` → all error results; row counts unchanged | unit auto | `test_ac_38_database_security` |
-| AC-39 | NFR-6 | A recursive CTE that runs forever is aborted with an error within 2.5 s | unit auto | `test_ac_39_database_query_timeout` |
+| AC-39 | NFR-6 | `WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c) SELECT count(*) FROM c` (it must finish before returning any row) is aborted with an error result within 3 s | unit auto | `test_ac_39_database_query_timeout` |
 | AC-40 | FR-31 | Clock 2026-11-10T12:00:00Z: `current` tz Asia/Tokyo → `2026-11-10T21:00:00+09:00`; `convert` 2026-11-10T12:00:00 Europe/London→Asia/Tokyo → `2026-11-10T21:00:00+09:00`; `calculate` 2026-11-10T12:00:00 +30 days → `2026-12-10T12:00:00`; days −10 → `2026-10-31T12:00:00` | unit auto | `test_ac_40_datetime_operations` |
-| AC-41 | FR-31, FR-17 | Timezone "Mars/Base" → "Unknown timezone: Mars/Base"; `convert` without `to_tz` → "Invalid input:"; `calculate` without days/hours/minutes → "Invalid input:" | unit auto | `test_ac_41_datetime_errors` |
+| AC-41 | FR-31, FR-17 | Timezone "Mars/Base" → "Unknown timezone: Mars/Base"; `convert` without `to_tz` → "Invalid input:"; `calculate` without days/hours/minutes → "Invalid input:"; `convert` with datetime `2026-11-10T12:00:00+02:00` → "Invalid input: datetime must not include an offset for convert"; every success output has exactly the key `result` | unit auto | `test_ac_41_datetime_errors` |
 | AC-42 | FR-32 | `GET /tools` → 5 tools, each with name, description, and `parameters.type == "object"` | int auto | `test_ac_42_list_tools` |
-| AC-43 | FR-33 | The LLM request's tools: 5 items, each with `input_schema`, `strict: true` and `additionalProperties: false` | int auto | `test_ac_43_tool_definitions_sent` |
+| AC-43 | FR-33, FR-36 | The LLM request's tools: 5 items, each with `input_schema`, `strict: true` and `additionalProperties: false`; **given** `LLM_MODEL=test-model`, `LLM_EFFORT=low` the request has model "test-model", max_tokens 16000, thinking `{type: "adaptive"}` and effort "low"; with neither set, model "claude-opus-5-5" and effort "medium" | int auto | `test_ac_43_llm_request_settings` |
 
 ### Logging, health, platform
 | AC | FR/NFR | Given / When / Then | Level | Test |
 |---|---|---|---|---|
 | AC-44 | FR-34 | **Required test 6 (logging).** **Given** a turn with calculator `2+2` (ok) and `1/0` (error) **then** 2 ToolExecution rows linked to the assistant message id: the first has success true, output {result: 4.0}, error_message null; the second has success false, error_message "Division by zero"; both have execution_time_ms ≥ 0 | int auto | `test_ac_44_tool_execution_logging` |
 | AC-45 | FR-35 | `GET /health` → 200 `{"status": "ok"}` | int auto | `test_ac_45_health` |
-| AC-46 | NFR-4 | **Given** a conversation in app.db **when** a new app instance starts on the same files **then** GET returns it | int auto | `test_ac_46_persistence_restart` |
-| AC-47 | NFR-9, NFR-3 | The full suite passes with `ANTHROPIC_API_KEY` unset and the network blocked (a socket-blocking fixture) | int auto | `test_ac_47_no_network_no_key` (conftest guard) |
+| AC-46 | NFR-4 | **Given** a conversation created through `create_app(settings)` **when** a second `create_app(settings)` is built on the same files **then** GET on the second app returns it with its messages | int auto | `test_ac_46_persistence_restart` |
+| AC-47 | NFR-9, NFR-3 | Inside the test suite: `ANTHROPIC_API_KEY` is not set, `socket.create_connection(("example.com", 80))` raises an error, and the app starts and serves `/health` (the LLM client is created lazily) | int auto | `test_ac_47_no_network_no_key` |
 | AC-48 | NFR-2 | `docker compose up --build` → `/health` 200 within 60 s; create a conversation and send "What's 2+2?" with a real key → 200 | man | stage 5 |
 | AC-49 | NFR-3 | `docker compose run --rm api pytest` passes without a key | man | stage 5 |
 | AC-50 | NFR-1 | The Dockerfile base image is `python:3.12-slim`; `python --version` in the container shows 3.12 | man | stage 5 |
@@ -291,7 +296,7 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 |---|---|
 | FR-1 | 1, 2 |
 | FR-2 | 4 |
-| FR-3 | 5, 23 |
+| FR-3 | 5, 23, 26 |
 | FR-4 | 6 |
 | FR-5 | 7 |
 | FR-6 | 8 |
@@ -302,19 +307,19 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | FR-11 | 10 |
 | FR-12 | 13, 53 |
 | FR-13 | 14, 15, 54 |
-| FR-14 | 13 |
+| FR-14 | 13, 16 |
 | FR-15 | 20 |
 | FR-16 | 16, 17, 18 |
 | FR-17 | 17, 41 |
 | FR-18 | 19 |
 | FR-19 | 21 |
 | FR-20 | 22 |
-| FR-21 | 23, 26, 55 |
+| FR-21 | 23, 26, 55, 57 |
 | FR-22 | 24, 55 |
 | FR-23 | 25 |
 | FR-24 | 2, 3 |
 | FR-25 | 26, 27 |
-| FR-26 | 28, 29, 30 |
+| FR-26 | 28, 29, 30, 57 |
 | FR-27 | 16, 31, 32 |
 | FR-28 | 34 |
 | FR-29 | 35 |
@@ -322,8 +327,9 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | FR-31 | 40, 41 |
 | FR-32 | 42 |
 | FR-33 | 43 |
-| FR-34 | 27, 44 |
+| FR-34 | 19, 20, 27, 44 |
 | FR-35 | 45 |
+| FR-36 | 43 |
 | NFR-1 | 50 |
 | NFR-2 | 48 |
 | NFR-3 | 47, 49 |
@@ -336,7 +342,7 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | NFR-10 | 36 |
 | NFR-11 | 52 |
 
-**Coverage the other way:** every AC (1-56) cites at least one FR/NFR. Every in-scope S2 requirement maps to an FR/NFR:
+**Coverage the other way:** every AC (1-57) cites at least one FR/NFR. Every in-scope S2 requirement maps to an FR/NFR:
 - REQ-1..38 and 40-42 are covered.
 - REQ-47..50 are covered by NFR-11.
 - REQ-39 and 43..46 are out of scope (§2).
@@ -348,5 +354,6 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | Every S1/S2 item is in the spec, out of scope, or open questions | Pass. REQ-1..50 mapped (§13). The 7 edge cases → AC-10, 16, 14, 17, 19, 20, 22 |
 | No placeholder text or `[NEEDS CLARIFICATION]` | Pass |
 | No vague words; numbers have units | Pass (s, chars, rows, °C) |
-| IDs unique and consistently referenced | Pass (FR-1..35, NFR-1..11, AC-1..56) |
+| IDs unique and consistently referenced | Pass (FR-1..36, NFR-1..11, AC-1..57) |
 | Each FR has an AC; each AC is testable without reading the code | Pass |
+| Independent review v0.1 (17 findings) | All applied in v0.2 (see change log) |

@@ -1,6 +1,6 @@
 # Project status: chatbot-tools
 
-- **Spec:** `docs/chatbot-spec.md` (v0.1, Draft, 2026-11-10)
+- **Spec:** `docs/chatbot-spec.md` (v0.2, Draft, 2026-11-10)
 - **Source:** `chatbot-tool.md` (S1)
 - **Conventions (Git, agreed 2026-11-10):**
   - `main` always works; only tested work is merged into it.
@@ -12,7 +12,7 @@
 - **Last updated:** 2026-11-10
 
 ## Next action
-Stages 1-2 approved 2026-11-10. Spec v0.1 written (35 FR, 11 NFR, 56 AC). User reviews and approves, then stage 4 (task list, then TDD).
+Stages 1-2 approved 2026-11-10. Spec v0.2 (independent review applied; 36 FR, 11 NFR, 57 AC). User approves, then stage 4 (task list, then TDD).
 
 ## Open questions
 | # | Question | Blocking? |
