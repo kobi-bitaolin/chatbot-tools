@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Version** | 0.2 |
-| **Status** | Draft |
+| **Status** | Approved (2026-11-10) |
 | **Date** | 2026-11-10 |
 
 ## 1. Source documents

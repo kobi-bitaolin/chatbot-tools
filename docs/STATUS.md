@@ -1,6 +1,6 @@
 # Project status: chatbot-tools
 
-- **Spec:** `docs/chatbot-spec.md` (v0.2, Draft, 2026-11-10)
+- **Spec:** `docs/chatbot-spec.md` (v0.2, Approved, 2026-11-10)
 - **Source:** `chatbot-tool.md` (S1)
 - **Conventions (Git, agreed 2026-11-10):**
   - `main` always works; only tested work is merged into it.
@@ -8,11 +8,11 @@
   - One commit per task, Conventional Commits with IDs, e.g. `feat(calculator): safe expression parser (FR-5, AC-7)`. Prefixes: feat, fix, test, docs, chore.
   - `docs/` is committed. `chatbot-tool.md`, `.env`, and DB files are git-ignored.
   - Never push without an explicit yes. Remote: private GitHub repo, not set up yet.
-- **Current stage:** 3, spec and test plan, awaiting approval
+- **Current stage:** 4a, task list, awaiting approval
 - **Last updated:** 2026-11-10
 
 ## Next action
-Stages 1-2 approved 2026-11-10. Spec v0.2 (independent review applied; 36 FR, 11 NFR, 57 AC). User approves, then stage 4 (task list, then TDD).
+Stages 1-3 approved 2026-11-10. Task list `docs/chatbot-tasks.md` (T-1..T-13) awaiting approval. Then T-1 (skeleton) on Sonnet.
 
 ## Open questions
 | # | Question | Blocking? |
@@ -30,7 +30,7 @@ Stages 1-2 approved 2026-11-10. Spec v0.2 (independent review applied; 36 FR, 11
 - Streaming responses (REQ-39)
 
 ## Tasks
-None yet (stage 4).
+See `docs/chatbot-tasks.md`. All 13 tasks: not started.
 
 ## AI usage log
 `docs/ai-usage-log.md` (entries so far: 1)
