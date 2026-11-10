@@ -9,11 +9,11 @@
   - `docs/` is committed. `chatbot-tool.md`, `.env`, and DB files are git-ignored.
   - Remote: private repo https://github.com/kobi-bitaolin/chatbot-tools (created 2026-11-10).
   - **Standing yes (2026-11-10):** push `main` to `origin` after every merged task. Anything else (other branches, force-push, changing visibility, adding collaborators) needs a fresh yes. Make it public / share only at stage 6 with a fresh yes.
-- **Current stage:** 4b, TDD implementation, T-1 done; next T-2
+- **Current stage:** 4b, TDD implementation, T-1..T-2 done; next T-3
 - **Last updated:** 2026-11-10
 
 ## Next action
-Stages 1-3 and the task list approved 2026-11-10. T-1 done. Next: T-2 (data model + conversation endpoints), recommended model Sonnet.
+Stages 1-3 and the task list approved 2026-11-10. T-1, T-2 done. Next: T-3 (LLM client, fake LLM, basic chat) on **Opus**. Milestone 1 report after T-3.
 
 ## Open questions
 | # | Question | Blocking? |
@@ -36,13 +36,14 @@ See `docs/chatbot-tasks.md`.
 | Task | Status |
 |---|---|
 | T-1 skeleton | done 2026-11-10 |
-| T-2..T-13 | not started |
+| T-2 conversations | done 2026-11-10 |
+| T-3..T-13 | not started |
 
 ## AI usage log
 `docs/ai-usage-log.md` (entries so far: 1)
 
 ## Acceptance criteria results
-- Pass: AC-45, AC-47 (also inside Docker; early AC-49 check: suite passes in the container without a key)
+- Pass: AC-1, AC-4, AC-6, AC-7, AC-45, AC-46, AC-47 (AC-8 partly: GET/DELETE/reset; send is added in T-3) (also inside Docker; early AC-49 check: suite passes in the container without a key)
 - Early Docker checks (T-1): health OK, runs as non-root `app`, writes `app.db` to the volume, `tzdata` timezones OK, healthcheck `healthy`
 - Not run yet: the rest
 
