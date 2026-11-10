@@ -1,6 +1,6 @@
 # Project status: chatbot-tools
 
-- **Spec:** `docs/chatbot-spec.md` (v0.7, Approved, 2026-11-10)
+- **Spec:** `docs/chatbot-spec.md` (v0.8, Approved, 2026-11-10)
 - **Source:** `chatbot-tool.md` (S1)
 - **Conventions (Git, agreed 2026-11-10):**
   - `main` always works; only tested work is merged into it.
@@ -11,11 +11,11 @@
   - **Standing yes (2026-11-10):** push `main` to `origin` after every merged task. Anything else (other branches, force-push, changing visibility, adding collaborators) needs a fresh yes. Make it public / share only at stage 6 with a fresh yes.
   - **Merges need a yes per task** (2026-11-10: the user declined a standing yes for merge + branch delete).
   - **Scope (2026-11-10):** build strictly what S1 asks, nothing else. `Message.status` kept (user's choice) as the way to handle failed turns (S1:328).
-- **Current stage:** 4b, TDD implementation, T-1..T-7b merged; T-8 done on `feat/history`, waiting for merge yes
+- **Current stage:** 4b, TDD implementation, T-1..T-8 merged; T-8b done on `fix/weather-unit`, waiting for merge yes; next T-9
 - **Last updated:** 2026-11-10
 
 ## Next action
-Stages 1-3 and the task list approved 2026-11-10. T-1..T-6 done and merged (T-6 merged 2026-11-10, incl. the v0.6 scope cuts; FR-26 kept in full after the scope review). T-7 (tool loop + neutral `LLMResult`) merged 2026-11-10, all 65 tests green, mutation-checked. Milestone 2 reached. **Provider change (2026-11-10):** the user switched the LLM to Google Gemini; **spec v0.7 approved 2026-11-10** (D9, FR-37, AC-62/63, task T-7b). Real Gemini checked with a scratchpad probe (key in `.env`): single tool, two tools in one round, no tools, tool error all work. Risk R1 fixed in v0.7 (calculator description + D0 wording; 25/25 real runs use the calculator). T-7b done 2026-11-10: Gemini client (`google-genai==3.0.0`, `anthropic` removed), internal format ↔ Gemini translation, `LLMUnavailableError`; 77 tests green locally and in Docker (no key), mutation-checked; whole app checked with real Gemini (two tools in one round, tool error, no tools). T-7b merged 2026-11-10. Manual end-to-end tests by the user on `main` (before T-8): all passed. T-8 done 2026-11-10 on `feat/history`: history replay (FR-21..23), message mapping moved to `schemas.py`, AC-59 exception removed; 80 tests green locally and in Docker (no key), mutation-checked (thinking filter, trim, final-answer source); real Gemini 4-turn chat with tools replays fine (all HTTP 200, follow-ups use earlier turns). **Now: merge T-8 (needs yes), then T-9** (datetime tool, Sonnet). Note: until T-11 adds the round limit (FR-15), the loop has no cap.
+Stages 1-3 and the task list approved 2026-11-10. T-1..T-6 done and merged (T-6 merged 2026-11-10, incl. the v0.6 scope cuts; FR-26 kept in full after the scope review). T-7 (tool loop + neutral `LLMResult`) merged 2026-11-10, all 65 tests green, mutation-checked. Milestone 2 reached. **Provider change (2026-11-10):** the user switched the LLM to Google Gemini; **spec v0.7 approved 2026-11-10** (D9, FR-37, AC-62/63, task T-7b). Real Gemini checked with a scratchpad probe (key in `.env`): single tool, two tools in one round, no tools, tool error all work. Risk R1 fixed in v0.7 (calculator description + D0 wording; 25/25 real runs use the calculator). T-7b done 2026-11-10: Gemini client (`google-genai==3.0.0`, `anthropic` removed), internal format ↔ Gemini translation, `LLMUnavailableError`; 77 tests green locally and in Docker (no key), mutation-checked; whole app checked with real Gemini (two tools in one round, tool error, no tools). T-7b merged 2026-11-10. Manual end-to-end tests by the user on `main` (before T-8): all passed. T-8 done 2026-11-10 on `feat/history`: history replay (FR-21..23), message mapping moved to `schemas.py`, AC-59 exception removed; 80 tests green locally and in Docker (no key), mutation-checked (thinking filter, trim, final-answer source); real Gemini 4-turn chat with tools replays fine (all HTTP 200, follow-ups use earlier turns). T-8 merged 2026-11-10. The user's manual T-8 checks with real Gemini passed, and found that Gemini reported mock temperatures as °F → spec v0.8 (approved): weather description says °C, task T-8b done on `fix/weather-unit` (80 tests green locally and in Docker; 5/5 real runs say °C). **Now: merge T-8b (needs yes), then T-9** (datetime tool, Sonnet). Note: until T-11 adds the round limit (FR-15), the loop has no cap.
 
 Separation of concerns (spec v0.5, NFR-12): rules in `CLAUDE.md` and architecture §2.1, enforced by `tests/test_architecture.py` (AC-59). Leak fixes: T-6 done (`LLMClient` takes plain values; prompt tool names from the registry), T-7 `LLMResult`, T-8 message mapping into `schemas.py` (done; `KNOWN_EXCEPTIONS` removed). D8: no repository layer.
 
@@ -50,11 +50,12 @@ See `docs/chatbot-tasks.md`.
 | T-6 tool executor | done 2026-11-10 |
 | T-7 tool loop | done 2026-11-10 (merged) |
 | T-7b Gemini switch | done 2026-11-10 (merged) |
-| T-8 history | done 2026-11-10 (branch, not merged) |
+| T-8 history | done 2026-11-10 (merged) |
+| T-8b weather unit | done 2026-11-10 (branch, not merged) |
 | T-9..T-13 | not started |
 
 ## AI usage log
-`docs/ai-usage-log.md` (entries so far: 16)
+`docs/ai-usage-log.md` (entries so far: 19)
 
 ## Acceptance criteria results
 - Pass: AC-1, AC-2, AC-3, AC-4, AC-6, AC-7, AC-8, AC-9, AC-11, AC-12, AC-22, AC-45, AC-46, AC-47 (also inside Docker; early AC-49 check: suite passes in the container without a key)
@@ -70,6 +71,7 @@ See `docs/chatbot-tasks.md`.
 ## Decisions and changes since spec approval
 | Date | Change | Spec version | Affected IDs |
 |---|---|---|---|
+| 2026-11-10 | Weather description states °C (found in the user's manual T-8 test: Gemini guessed °F) | 0.8 | FR-29, AC-35, T-8b |
 | 2026-11-10 | Scope review against S1: removed `strict` tool schemas, the `thinking` parameter and the `LLM_EFFORT` setting (effort fixed at `medium`); requirements doc fixed (status, REQ-51 for S1:30, Q numbering) | 0.6 | FR-33, FR-36, AC-43, AC-53, R9, Q7, REQ-51 |
 | 2026-11-10 | Separation of concerns made explicit: NFR-12 (S1:30) + AC-59..61; FR-24 prompt tool names from the registry; architecture §2.1, D8; `CLAUDE.md` created; skill ground rule 12 | 0.5 | NFR-12, FR-24, AC-59, AC-60, AC-61, T-6, T-7, T-8 |
 | 2026-11-10 | Q7: strict-mode-unsupported keywords (`maxLength` etc.) removed from `input_schema` only; AC-43, AC-53 extended | 0.4 | FR-33, AC-43, AC-53, R9 |

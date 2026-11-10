@@ -39,3 +39,6 @@ def test_ac_35_weather():
         assert type(result["temperature"]) is int and -30 <= result["temperature"] <= 45
         assert result["condition"] in CONDITIONS
         assert type(result["humidity"]) is int and 0 <= result["humidity"] <= 100
+
+    # The output is a bare number, so the LLM learns the unit from the description (spec v0.8).
+    assert "°C" in weather.TOOL.description
