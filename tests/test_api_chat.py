@@ -8,12 +8,12 @@ from datetime import datetime
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.services.chat import APP_INSTRUCTIONS
-from tests.conftest import TickingClock
+from app.services.chat import build_system_prompt
+from tests.conftest import EXPECTED_TOOLS, TickingClock
 from tests.fake_llm import FakeLLM, text_response
 
 UNKNOWN_ID = "conv_000000000000"
-DEFAULT_SYSTEM = APP_INSTRUCTIONS + "\n\nYou are a helpful assistant."
+DEFAULT_SYSTEM = build_system_prompt(EXPECTED_TOOLS, None)
 
 
 def create(client, **body):
@@ -41,7 +41,8 @@ def test_ac_10_basic_chat_no_tools(client, fake_llm):
     }
     assert len(fake_llm.requests) == 1  # exactly one LLM call
     assert fake_llm.requests[0]["tool_choice"] == {"type": "auto"}
-    # The "5 tools in every request" check is added in T-6, when the tools exist.
+    # Every registered tool is offered (5 once T-9 and T-10 add the last two).
+    assert [t["name"] for t in fake_llm.requests[0]["tools"]] == EXPECTED_TOOLS
 
 
 def test_ac_2_default_system_prompt(client, fake_llm):
@@ -67,7 +68,8 @@ def test_ac_3_system_prompt_stable(client, fake_llm):
 
     first, second = (request["system"] for request in fake_llm.requests)
     assert first == second  # byte-identical on every call
-    assert first == APP_INSTRUCTIONS + "\n\nAnswer in French."
+    assert first == build_system_prompt(EXPECTED_TOOLS, "Answer in French.")
+    assert first.endswith("\n\nAnswer in French.")
 
 
 def test_ac_22_first_message(client, fake_llm):

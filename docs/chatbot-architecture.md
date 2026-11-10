@@ -38,7 +38,25 @@ Guiding rule: keep it as small as possible and explainable line by line. The des
 | Tools | `app/tools/calculator.py`, `web_search.py`, `weather.py`, `database.py`, `datetime_tool.py` | One file per tool, pure logic |
 | Storage | `app/db.py`, `app/models.py` | Engine, one session per request, ORM models (section 5) |
 | Sample DB | `app/sample_data.py` | Creates and seeds `sample.db` (section 5) |
-| Config | `app/config.py` | Settings: API key, model, effort, limits, DB paths |
+| Config | `app/config.py` | Settings: API key, model, limits, DB paths |
+
+### 2.1 Layers and responsibilities (separation of concerns, NFR-12)
+
+Each layer has one job, so it has one reason to change.
+
+| Layer | Files | Its one job | Must not |
+|---|---|---|---|
+| HTTP | `app/api/` | Parse requests, call a service, shape the response | Hold business rules, query the DB, import `app.models` (from T-8) |
+| Validation | `app/schemas.py` | Request/response shapes, including the DB-row → response mapping (from T-8) | Touch the DB |
+| Business rules | `app/services/` | Conversations and one chat turn (orchestration) | Import `fastapi` or `anthropic`; read SDK objects |
+| LLM | `app/llm/` | Talk to the provider; turn its response into a neutral `LLMResult` (from T-7) | Import `app.config` (it gets plain values) |
+| Tools | `app/tools/` | Pure tool logic, registry, executor | Import anything from the app outside `app.tools` |
+| Data | `app/db.py`, `app/models.py` | Tables, engine, sessions | Hold rules |
+| Wiring | `app/main.py`, `app/config.py` | Read settings, build the objects, connect the layers, map service errors to HTTP codes | Hold rules |
+
+**Import direction:** api → services → (tools, llm, models). Only `app/main.py` knows every layer. `tests/test_architecture.py` (AC-59) fails on a forbidden import, so the rule holds without anyone remembering it.
+
+**Why it pays here:** switching LLM provider touches only `app/llm/`; adding a tool touches only `app/tools/` (the prompt and `GET /tools` read the registry); the fake LLM and the injected clock work because services receive their dependencies instead of creating them.
 
 ## 3. Tools
 
@@ -59,7 +77,7 @@ The executor wraps every run into a `ToolResult` in the S1:121-131 format, plus 
  "success": false, "error": "Division by zero", "execution_time_ms": 1}
 ```
 
-Format translation: S1 calls the schema `parameters`, while the Anthropic API calls it `input_schema`. The registry stores the S1 format and converts it in one place. Definitions set `strict: true` and `additionalProperties: false` (see R9).
+Format translation: S1 calls the schema `parameters`, while the Anthropic API calls it `input_schema`. The registry stores the S1 format and renames `parameters` to `input_schema` in one place; the schema itself is sent unchanged (spec v0.6: no `strict` mode, since S1 doesn't ask for it and the executor validates every input anyway).
 
 ### 3.2 Executor
 
@@ -234,7 +252,7 @@ It is stored once per conversation and **never contains changing values** such a
 Why: current Claude models reject a replayed thinking block if earlier history changed (the "history-editing check"). Dropping all earlier thinking blocks is allowed, and after that, trimming old turns is safe whatever the account age. Within one turn, thinking blocks are passed back unchanged, which tool use requires. Summarizing old turns (REQ-45) is on the "if time" list.
 
 **D6: Model settings.**
-- Adaptive thinking (the default on Claude Opus 5.5), with `effort` set explicitly from env (`LLM_EFFORT`, default `medium`), and `max_tokens` 16,000.
+- No `thinking` parameter (spec v0.6): Claude Opus 5.5 thinks adaptively by default and can't turn it off, so thinking blocks still arrive and the replay rule above still applies. `effort` is fixed at `medium` in code (explicit, so a changed API default can't change behavior), and `max_tokens` is 16,000.
 - Refusals are handled with a plain `stop_reason` check (section 4, step 5). No beta features are used. The API's automatic refusal fallback is possible future work.
 
 **D7: Token tracking (REQ-42).** Sum `input_tokens + output_tokens` over every LLM round in the turn, store it on the assistant message, and return it as `tokens_used`. Prompt caching is not used, so there are no cache token fields to add.
@@ -268,7 +286,7 @@ Why: current Claude models reject a replayed thinking block if earlier history c
   - Uvicorn on port 8000, with a health check on `/health`.
 - **docker-compose.yml:**
   - One service, `api`, with port `8000:8000`.
-  - `env_file: .env` provides `ANTHROPIC_API_KEY`, `LLM_MODEL` and `LLM_EFFORT`.
+  - `env_file: .env` provides `ANTHROPIC_API_KEY` and `LLM_MODEL`.
   - The named volume `chatbot-data` is mounted at `/app/data`.
 - **Tests in Docker:** `docker compose run --rm api pytest`. No API key is needed, because the fake LLM is used.
 
@@ -296,7 +314,7 @@ With this, all 6 required tests (S1:348-354) and every failure path can be teste
 | R6 | Timezones fail in Docker | `tzdata`; a datetime convert check inside the container in the skeleton task |
 | R7 | Flaky tests | Fake LLM, fixed seeds, injected clock and seed date, no network |
 | R8 | API cost during manual tests | Few manual checks; model switchable via `LLM_MODEL` |
-| R9 | `strict: true` may reject some schema features | The executor validates every input itself with `jsonschema` anyway. If the API rejects a schema, drop `strict` for that tool |
+| R9 | ~~`strict: true` may reject some schema features~~ Closed in spec v0.6: `strict` is not used | The executor validates every input itself with `jsonschema` anyway. Spec v0.4: the registry removes the keywords strict mode doesn't support (`maxLength` etc.) from `input_schema`. If the API still rejects a schema, drop `strict` for that tool |
 | R10 | Fake LLM drifts from the real response shape | The fake uses the same block types and stop reasons as the SDK, plus one real-LLM smoke check per stage-5 run |
 | R11 | Orphan rows after delete/reset | ORM cascade + a test that counts rows after delete and reset |
 | R12 | Non-root user can't write the volume | `chown` in the Dockerfile; checked in the skeleton task by starting compose and creating a conversation |
@@ -306,6 +324,7 @@ With this, all 6 required tests (S1:348-354) and every failure path can be teste
 - **C1: database tool input:** the LLM writes SQL, and the tool runs it read-only (section 3.3, D4). This is a documented deviation from S1:204.
 - **C2: limits:** tool timeout 5 s per round, max 5 tool rounds, max 20 history turns, DB row limit 100, message max 10,000 chars, expression max 200 chars, 8 executor workers.
 - **C3: refusal fallback beta:** not used (D6). Plain refusal check only.
+- **D8: no separate data-access (repository) layer (2026-11-10):** the services call the SQLAlchemy session and `commit()` themselves. At this size a repository layer would add a file per table and no real benefit; the session is still injected, so tests use temp files. Revisit if a second storage backend is ever needed.
 
 ## 14. Review log
 

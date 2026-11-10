@@ -35,9 +35,18 @@ def get_llm(request: Request):
     return request.app.state.llm
 
 
+def get_registry(request: Request):
+    return request.app.state.registry
+
+
 @router.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@router.get("/tools", response_model=schemas.ToolList)
+def list_tools(registry=Depends(get_registry)):
+    return {"tools": registry.list_tools()}  # FR-32
 
 
 @router.post("/conversations", status_code=201, response_model=schemas.ConversationCreated)
@@ -109,8 +118,9 @@ def send_message(
     session: Session = Depends(get_session),
     clock: Callable[[], datetime] = Depends(get_clock),
     llm=Depends(get_llm),
+    registry=Depends(get_registry),
 ):
-    assistant = chat.send_message(session, clock, llm, conversation_id, body.content)
+    assistant = chat.send_message(session, clock, llm, registry, conversation_id, body.content)
     return {
         "message": {"role": "assistant", "content": assistant.content},
         "tools_used": assistant.tools_used,

@@ -2,7 +2,7 @@
 
 - **Source (S1):** `chatbot-tool.md` (line numbers in brackets, e.g. `S1:40`)
 - **Stage:** 1, requirements intake
-- **Status:** Draft, awaiting approval
+- **Status:** Approved (2026-11-10)
 - **Date:** 2026-11-10
 
 Provisional IDs (`REQ-n`) are used here. The numbered `FR`/`NFR` spec is written in stage 3.
@@ -97,7 +97,12 @@ Build a chatbot HTTP API that uses LLM function calling to run tools (calculator
 
 Note: REQ-40 and REQ-41 are "Should" items, but edge cases REQ-30 and REQ-31 require handling invalid parameters and timeouts anyway. In practice they are needed.
 
-### 2.9 Documentation and submission (S1:313-321, S1:372-413)
+### 2.9 Quality (S1:26-30)
+| ID | Requirement | Priority | Source |
+|---|---|---|---|
+| REQ-51 | The product is functional and well-structured (separation of concerns). Added 2026-11-10 in the T-6 scope review; spec NFR-12 | Must | S1:30 |
+
+### 2.10 Documentation and submission (S1:313-321, S1:372-413)
 | ID | Requirement | Priority | Source |
 |---|---|---|---|
 | REQ-47 | Git repo with `README.md`, `AI_USAGE.md`, `docker-compose.yml`, `Dockerfile`, `requirements.txt`, app code, tests | Must | S1:374-385 |
@@ -143,11 +148,11 @@ Note: REQ-40 and REQ-41 are "Should" items, but edge cases REQ-30 and REQ-31 req
 ## 7. Decided answers
 | # | Question | Answer | Date |
 |---|---|---|---|
-| Q1 | Scope (G11) | Essentials first: all **Must** items. Tool timeouts (REQ-40) and tool input validation (REQ-41) are included, because edge cases REQ-30/REQ-31 require them. Token count (REQ-42) is included, because `tokens_used` is part of the required response format (REQ-22). Streaming (REQ-39) is deferred (Q3). **Nice** items (REQ-43..46) are deferred: "if there's time" | 2026-11-10 |
+| Q1 | Scope (G11) | Essentials first: all **Must** items. Tool timeouts (REQ-40) and tool input validation (REQ-41) are included, because edge cases REQ-30/REQ-31 require them. Token count (REQ-42) is included, because `tokens_used` is part of the required response format (REQ-22). Streaming (REQ-39) is deferred (G15). **Nice** items (REQ-43..46) are deferred: "if there's time" | 2026-11-10 |
 | Q2 | Mock or real (G5) | Weather and web search are **mock** for now. A real weather API is deferred: "if there's time" | 2026-11-10 |
-| Q3 | Streaming (G15) | Deferred to "if time" | 2026-11-10 |
-| Q4 | Gaps G1-G4, G8-G10, G12, G13 | All recommendations in section 5 accepted as written | 2026-11-10 |
-| Q5 | Git (G14) | Repo initialized on `main` with feature branches and Conventional Commits. `docs/` committed, `chatbot-tool.md` ignored (see STATUS.md) | 2026-11-10 |
+| G15 | Streaming | Deferred to "if time" | 2026-11-10 |
+| Q3 | Gaps G1-G4, G8-G10, G12, G13 | All recommendations in section 5 accepted as written | 2026-11-10 |
+| Q4 | Git (G14) | Repo initialized on `main` with feature branches and Conventional Commits. `docs/` committed, `chatbot-tool.md` ignored (see STATUS.md) | 2026-11-10 |
 
 ## 8. Open questions
 - None blocking. G6 (how the database tool turns a question into a query) and G7 (timeout, max tool rounds, context limit) are design choices for stage 2.

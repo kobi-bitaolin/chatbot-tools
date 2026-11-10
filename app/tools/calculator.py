@@ -14,7 +14,7 @@ import ast
 import math
 import operator
 
-from app.tools.base import ToolError
+from app.tools.base import Tool, ToolError
 
 INVALID = "Invalid expression"
 MAX_EXPONENT = 1000
@@ -107,3 +107,24 @@ def _evaluate(node: ast.AST, depth: int) -> float:
 
     # Anything else: other names, attributes, strings, lists, other calls...
     raise ToolError(INVALID)
+
+
+TOOL = Tool(
+    name="calculator",
+    description=(
+        "Evaluate a math expression. Use for ANY arithmetic, percentages or math "
+        "functions. Never calculate in your head."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "expression": {
+                "type": "string",
+                "description": "Math expression, e.g. '2 + 2 * 3' or 'sqrt(144) + 5'",
+                "maxLength": 200,
+            }
+        },
+        "required": ["expression"],
+    },
+    run=run,
+)

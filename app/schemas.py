@@ -79,3 +79,15 @@ class SendMessageResponse(BaseModel):
     message: AssistantReply
     tools_used: list
     tokens_used: int
+
+
+class ToolInfo(BaseModel):
+    """FR-32: one tool in the S1:102-119 format."""
+
+    name: str
+    description: str
+    parameters: dict
+
+
+class ToolList(BaseModel):
+    tools: list[ToolInfo]

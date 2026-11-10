@@ -6,6 +6,8 @@ so tests pass `random.Random(42)` and always get the same values.
 
 import random
 
+from app.tools.base import Tool
+
 CONDITIONS = ["sunny", "cloudy", "rainy", "snowy", "windy", "foggy"]
 _default_rng = random.Random()
 
@@ -28,3 +30,21 @@ def run(location: str, rng: random.Random = _default_rng) -> dict:
         "condition": condition,
         "humidity": humidity,
     }
+
+
+TOOL = Tool(
+    name="weather",
+    description="Get the current weather for a location.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "location": {
+                "type": "string",
+                "description": "City or place name, e.g. 'London'",
+                "maxLength": 100,
+            }
+        },
+        "required": ["location"],
+    },
+    run=run,
+)
