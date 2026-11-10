@@ -142,7 +142,8 @@ Note: REQ-40 and REQ-41 are "Should" items, but edge cases REQ-30 and REQ-31 req
 ## 7. Decided answers
 | # | Question | Answer | Date |
 |---|---|---|---|
-| | *(filled in after your answers)* | | |
+| Q1 | Scope (G11) | Essentials first: all **Must** items. Tool timeouts (REQ-40) and tool input validation (REQ-41) are included, because edge cases REQ-30/REQ-31 require them. Token count (REQ-42) is included, because `tokens_used` is part of the required response format (REQ-22). Streaming (REQ-39): see open question G15. **Nice** items (REQ-43..46) are deferred: "if there's time" | 2026-11-10 |
+| Q2 | Mock or real (G5) | Weather and web search are **mock** for now. A real weather API is deferred: "if there's time" | 2026-11-10 |
 
 ## 8. Open questions
 - Q1-Q4, asked in chat. G1-G3, G4, G8-G10, G12, G13 have recommendations waiting for your OK.
