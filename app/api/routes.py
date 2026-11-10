@@ -39,6 +39,10 @@ def get_registry(request: Request):
     return request.app.state.registry
 
 
+def get_executor(request: Request):
+    return request.app.state.executor
+
+
 @router.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -119,8 +123,11 @@ def send_message(
     clock: Callable[[], datetime] = Depends(get_clock),
     llm=Depends(get_llm),
     registry=Depends(get_registry),
+    executor=Depends(get_executor),
 ):
-    assistant = chat.send_message(session, clock, llm, registry, conversation_id, body.content)
+    assistant = chat.send_message(
+        session, clock, llm, registry, executor, conversation_id, body.content
+    )
     return {
         "message": {"role": "assistant", "content": assistant.content},
         "tools_used": assistant.tools_used,

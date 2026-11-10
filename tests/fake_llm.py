@@ -1,7 +1,9 @@
 """A fake LLM for tests (architecture §11).
 
 It has the same `complete(...)` method as `app.llm.client.LLMClient`, but:
-- returns scripted responses, one per call, built from the real SDK types,
+- returns scripted responses, one per call. Tests build them from the real
+  SDK types, and they pass through the real `to_llm_result`, so the service
+  gets the same `LLMResult` it gets in production (AC-60),
 - records every request it receives, so tests can check exactly what was sent,
 - can raise an exception instead of answering (for the error paths).
 
@@ -12,6 +14,9 @@ import copy
 import itertools
 
 from anthropic.types import Message, TextBlock, ThinkingBlock, ToolUseBlock, Usage
+
+from app.llm.client import to_llm_result
+from app.llm.result import LLMResult
 
 _ids = itertools.count(1)
 
@@ -63,7 +68,7 @@ class FakeLLM:
         """Queue responses; each LLM call takes the next one."""
         self.responses.extend(responses)
 
-    def complete(self, system: str, messages: list, tools: list, tool_choice: dict) -> Message:
+    def complete(self, system: str, messages: list, tools: list, tool_choice: dict) -> LLMResult:
         # Deep copy: the chat service keeps appending to `messages` after the
         # call, and tests must see the request exactly as it was sent.
         self.requests.append(
@@ -76,4 +81,4 @@ class FakeLLM:
         item = self.responses.pop(0)
         if isinstance(item, BaseException):
             raise item
-        return item
+        return to_llm_result(item)
