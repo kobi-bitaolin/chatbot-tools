@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 0.9 |
+| **Version** | 0.10 |
 | **Status** | Approved (2026-11-10) |
 | **Date** | 2026-11-10 |
 
@@ -54,7 +54,7 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 | FR-14 | Each `tools_used` item must be `{tool, input, output, success, error, execution_time_ms}`. `output` is null and `error` is text on failure; `output` is set and `error` is null on success | M | S1:121-131, G3 |
 | FR-15 | After 5 tool rounds, if the LLM requests tools again, those calls must not run. Each must get the error result "Tool call limit reached" (`success: false`, `execution_time_ms: 0`), be included in `tools_used` and logged as a ToolExecution, and one final LLM call must be made with tool choice `none` (Gemini mode `NONE`) | M | S1:332, S3 §4 |
 | FR-16 | A tool error, an invalid input, an unknown tool name or a timeout must never fail the request. The result must go to the LLM with `is_error: true` and the error text | M | S1:328, S1:330, D3 |
-| FR-17 | Tool input must be validated against the tool's JSON Schema, plus the per-operation datetime checks, before running. A failure gives an error result starting with "Invalid input:" | S | S1:330, S1:360 |
+| FR-17 | Tool input must be validated against the tool's JSON Schema, plus the per-operation datetime checks, before running. A field that isn't in the schema's `properties` is also rejected ("Invalid input: unexpected field 'X'"); the schemas sent to the LLM stay unchanged (FR-33). A failure gives an error result starting with "Invalid input:" | S | S1:330, S1:360 |
 | FR-18 | The tools of one round share a deadline of `TOOL_TIMEOUT_S` (default 5). A call still running at the deadline gets the error "Timed out after {N}s", where N is formatted with Python's `{:g}` (5.0 → "5", 0.5 → "0.5"). Other calls in the round keep their results | S | S1:331, S1:359, G9 |
 | FR-19 | `tokens_used` must be the sum of `input_tokens + output_tokens` over all LLM calls of the turn, stored on the assistant message | S | S1:162, S1:361, D7 |
 | FR-20 | The first message of a new or reset conversation must be sent to the LLM as the only message | M | S1:333 |
@@ -165,6 +165,7 @@ None.
 | 0.7 | 2026-11-10 | LLM provider changed from Claude to Google Gemini (user's decision: Gemini credits). New D9 and FR-37 (internal format; only `app/llm` translates to Gemini). FR-10, FR-15, FR-25 (own `LLMUnavailableError`), FR-26, FR-33, FR-36, NFR-3, NFR-12, A3 reworded. AC-43, 47, 53, 58, 59, 60 reworded; AC-62, AC-63 added. Env var `ANTHROPIC_API_KEY` → `GEMINI_API_KEY`. New task T-7b. Risk R1 (found in a real-Gemini check: "What is 1/0?" answered without the calculator, 0/3): calculator description in §6 and the D0 app instructions now say that impossible or trivial math also goes to the calculator |
 | 0.8 | 2026-11-10 | Found in the user's manual T-8 check (approved by the user): real Gemini reported mock temperatures as °F, because nothing told it the unit. FR-29: the weather description now says the temperature is in °C (output keys unchanged, S1:196). §6 and AC-35 updated. New task T-8b |
 | 0.9 | 2026-11-10 | Found while starting T-10 (user's decision: keep D4 as written): SQLite asks the authorizer for a separate RECURSIVE action, so the D4 allow list (SELECT/READ/FUNCTION) rejects `WITH RECURSIVE`, and AC-39's recursive query would fail before the time limit is reached. AC-39 now uses a non-recursive cross join; AC-38 adds a recursive query to the rejected inputs |
+| 0.10 | 2026-11-10 | Found in T-11 (user's decision): since v0.6 the schemas allow extra fields, so an input like `{"expression": "1+1", "precision": 2}` passed validation and crashed the tool ("Tool failed unexpectedly", logged as a bug). FR-17: the executor rejects fields outside `properties` with "Invalid input: unexpected field 'X'" (S1:330); the schemas sent to Gemini are unchanged. AC-17 extended |
 
 ---
 
@@ -226,7 +227,7 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | AC-14 | FR-13 | **Required test 3 (multiple tools).** **Given** fake returns one response with tool_use weather `{"location": "Tokyo"}` (id "tu_1") and calculator `{"expression": "85*0.15"}` (id "tu_2"), then text **when** sent **then** both run; the 2nd LLM request has ONE user message with 2 tool_results with `tool_use_id` "tu_1", "tu_2" in that order; `tools_used` = [weather, calculator], both success; calculator output 12.75 | int auto | `test_ac_14_multiple_tools` |
 | AC-15 | FR-13 | **Given** weather's `run` patched to wait 0.2 s, and one response requesting weather then calculator **then** `tools_used` and tool_results are [weather, calculator] (request order, although calculator finishes first) | int auto | `test_ac_15_result_order` |
 | AC-16 | FR-16, FR-27 | **Required test 4 (tool error).** **Given** fake requests calculator `{"expression": "1/0"}`, then text **then** 200; `tools_used[0]` has success false, output null, error "Division by zero"; the 2nd LLM request's tool_result has `is_error: true` and content containing "Division by zero" | int auto | `test_ac_16_tool_error_handled` |
-| AC-17 | FR-16, FR-17 | **Given** fake requests calculator `{"expr": "1"}` **then** an error result starting "Invalid input:"; request 200 | int auto | `test_ac_17_invalid_params` |
+| AC-17 | FR-16, FR-17 | **Given** fake requests calculator `{"expr": "1"}` **then** an error result starting "Invalid input:"; request 200. **Given** calculator `{"expression": "1+1", "precision": 2}` **then** the error "Invalid input: unexpected field 'precision'" and the tool does not run | int auto | `test_ac_17_invalid_params` |
 | AC-18 | FR-16 | **Given** fake requests tool `teleport` **then** error "Unknown tool: teleport"; request 200 | int auto | `test_ac_18_unknown_tool` |
 | AC-19 | FR-18, FR-34, NFR-8 | **Given** `TOOL_TIMEOUT_S=1.0`, weather's `run` patched to block on an Event (released at teardown), and one response requesting weather and calculator `2+2` **then** the whole request takes < 1.5 s; weather has success false and error "Timed out after 1s"; calculator has result 4.0 (partial results); 2 ToolExecution rows, the weather one with success false | int auto | `test_ac_19_timeout_partial_results` |
 | AC-20 | FR-15, FR-34 | **Given** fake returns tool_use calculator `1+1` 6 times, then text **then** 5 tool rounds run; the 6th response's call gets the error "Tool call limit reached" without running; the 7th LLM call has `tool_choice: none`; 200 with the final text; 7 LLM calls in total; `tools_used` has 6 items, the 6th with success false and `execution_time_ms` 0; 6 ToolExecution rows | int auto | `test_ac_20_round_limit` |
