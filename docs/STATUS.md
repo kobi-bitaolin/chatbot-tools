@@ -10,11 +10,11 @@
   - Remote: private repo https://github.com/kobi-bitaolin/chatbot-tools (created 2026-11-10).
   - **Standing yes (2026-11-10):** push `main` to `origin` after every merged task. Anything else (other branches, force-push, changing visibility, adding collaborators) needs a fresh yes. Make it public / share only at stage 6 with a fresh yes.
   - **Merges need a yes per task** (2026-11-10: the user declined a standing yes for merge + branch delete).
-- **Current stage:** 4b, TDD implementation, T-1..T-4 done; next T-5
+- **Current stage:** 4b, TDD implementation, T-1..T-5 done; next T-6
 - **Last updated:** 2026-11-10
 
 ## Next action
-Stages 1-3 and the task list approved 2026-11-10. T-1..T-3 done and merged; Milestone 1 approved 2026-11-10. T-4 done and merged. Next: T-5 (web search and weather mocks, Sonnet).
+Stages 1-3 and the task list approved 2026-11-10. T-1..T-3 done and merged; Milestone 1 approved 2026-11-10. T-4 done and merged. T-5 committed on `feat/mock-tools`, merge waiting for a yes. Next: T-6 (tool base, registry, `GET /tools`, executor core, LLM request settings, **Opus**).
 
 ## Open questions
 | # | Question | Blocking? |
@@ -42,14 +42,15 @@ See `docs/chatbot-tasks.md`.
 | T-2 conversations | done 2026-11-10 |
 | T-3 basic chat | done 2026-11-10 |
 | T-4 calculator | done 2026-11-10 |
-| T-5..T-13 | not started |
+| T-5 mock tools | done 2026-11-10 (branch `feat/mock-tools`, merge pending) |
+| T-6..T-13 | not started |
 
 ## AI usage log
 `docs/ai-usage-log.md` (entries so far: 10)
 
 ## Acceptance criteria results
 - Pass: AC-1, AC-2, AC-3, AC-4, AC-6, AC-7, AC-8, AC-9, AC-11, AC-12, AC-22, AC-45, AC-46, AC-47 (also inside Docker; early AC-49 check: suite passes in the container without a key)
-- Also pass: AC-31, AC-32
+- Also pass: AC-31, AC-32, AC-34, AC-35
 - Partly: AC-10 (shape, 1 call, `tool_choice: auto` pass; the "5 tools" check is added in T-6 when the tools exist); AC-33 (attack inputs and no `eval(`/`exec(` pass; the 201-char "Invalid input:" check goes through the executor's schema validation, added in T-11)
 - Milestone 1 Docker smoke test (T-3): `/health` ok, create conversation ok, blank content → 422, send without a key → 500 + stuck `pending` (Q5)
 - Early Docker checks (T-1): health OK, runs as non-root `app`, writes `app.db` to the volume, `tzdata` timezones OK, healthcheck `healthy`
