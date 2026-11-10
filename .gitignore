@@ -1,0 +1,29 @@
+# Secrets (document required keys in .env.example instead)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Assignment brief (kept locally, not part of the submission)
+chatbot-tool.md
