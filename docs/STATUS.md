@@ -7,7 +7,8 @@
   - One short-lived branch per feature (`feat/basic-chat`, `feat/calculator`, ...), merged into `main` when all tests pass, then deleted.
   - One commit per task, Conventional Commits with IDs, e.g. `feat(calculator): safe expression parser (FR-5, AC-7)`. Prefixes: feat, fix, test, docs, chore.
   - `docs/` is committed. `chatbot-tool.md`, `.env`, and DB files are git-ignored.
-  - Never push without an explicit yes. Remote: private GitHub repo, not set up yet.
+  - Remote: private repo https://github.com/kobi-bitaolin/chatbot-tools (created 2026-11-10).
+  - **Standing yes (2026-11-10):** push `main` to `origin` after every merged task. Anything else (other branches, force-push, changing visibility, adding collaborators) needs a fresh yes. Make it public / share only at stage 6 with a fresh yes.
 - **Current stage:** 4b, TDD implementation, T-1 done; next T-2
 - **Last updated:** 2026-11-10
 
