@@ -32,6 +32,9 @@ def build_app_instructions(tool_names: list[str]) -> str:
     return (
         "You are the assistant behind a chat API that can call tools. "
         "Use a tool whenever it gives a more accurate or more current answer than you can. "
+        # Risk R1 (spec v0.7): the model skipped the calculator for "What is 1/0?".
+        "Never answer a math question from your own knowledge, even a trivial or "
+        "impossible one such as division by zero: call the calculator. "
         f"Available tools: {', '.join(tool_names)}. "
         "If a tool returns an error, explain the problem to the user in plain words."
     )

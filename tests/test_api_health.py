@@ -17,7 +17,8 @@ def test_ac_45_health(client):
 
 def test_ac_47_no_network_no_key(settings):
     # No API key is available inside the test suite.
-    assert "ANTHROPIC_API_KEY" not in os.environ
+    assert "GEMINI_API_KEY" not in os.environ
+    assert "GOOGLE_API_KEY" not in os.environ
 
     # Any attempt to reach the network fails.
     with pytest.raises(NetworkBlockedError):

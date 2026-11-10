@@ -3,8 +3,9 @@
 It holds the tools in a fixed order and gives their definitions to two
 places, in the format each one needs:
 - `GET /tools` gets the S1 format: `{name, description, parameters}`.
-- The LLM gets the Anthropic format: the same schema under the key
-  `input_schema` (the only difference between the two formats).
+- The LLM layer gets the internal format: the same schema under the key
+  `input_schema` (the only difference between the two formats); app/llm
+  translates it for the provider (FR-37).
 """
 
 from app.tools import calculator, weather, web_search
@@ -29,7 +30,7 @@ class ToolRegistry:
         ]
 
     def api_definitions(self) -> list[dict]:
-        """FR-33: the Anthropic format, for every LLM request."""
+        """FR-33: the internal format, for every LLM request."""
         return [
             {"name": t.name, "description": t.description, "input_schema": t.parameters}
             for t in self._tools.values()

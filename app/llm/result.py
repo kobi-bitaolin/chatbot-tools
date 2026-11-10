@@ -26,3 +26,11 @@ class LLMResult:
     # Every block exactly as received, as plain dicts (thinking included, FR-22).
     # They are sent back to the LLM as-is in the next round.
     blocks: list[dict]
+
+
+class LLMUnavailableError(Exception):
+    """The LLM call failed or couldn't be made (FR-25).
+
+    The LLM layer raises only this, with the SDK's own error as its cause, so
+    the chat service never depends on a provider's error types (NFR-12).
+    """

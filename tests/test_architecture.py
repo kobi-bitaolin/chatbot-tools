@@ -40,6 +40,11 @@ def is_under(module: str, package: str) -> bool:
     return module == package or module.startswith(package + ".")
 
 
+def is_llm_sdk(module: str, name: str | None) -> bool:
+    """`import google.genai`, `from google.genai import types` and `from google import genai`."""
+    return is_under(module, "google.genai") or (module == "google" and name == "genai")
+
+
 def violations(path: str, source: str) -> list[str]:
     """The broken rules for one file. `path` is relative to app/, with forward slashes."""
     layer = path.split("/")[0] if "/" in path else ""
@@ -49,8 +54,8 @@ def violations(path: str, source: str) -> list[str]:
             continue
         where = f"{path}: {module}" + (f".{name}" if name else "")
 
-        if top(module) == "anthropic" and layer != "llm":
-            problems.append(f"{where} (only app/llm may import anthropic)")
+        if is_llm_sdk(module, name) and layer != "llm":
+            problems.append(f"{where} (only app/llm may import the Gemini SDK)")
         if layer == "tools":
             allowed = (
                 top(module) in sys.stdlib_module_names
@@ -84,7 +89,9 @@ def test_ac_59_checker_catches_violations():
     assert violations("tools/x.py", "from app.db import Base")
     assert violations("tools/x.py", "import requests")
     assert violations("services/x.py", "from fastapi import Request")
-    assert violations("services/x.py", "import anthropic")
+    assert violations("services/x.py", "from google import genai")
+    assert violations("services/x.py", "from google.genai import types")
+    assert violations("api/x.py", "import google.genai")
     assert violations("llm/x.py", "from app.config import Settings")
     assert violations("api/x.py", "from sqlalchemy import select")
     assert violations("api/x.py", "from app import models")
@@ -92,4 +99,5 @@ def test_ac_59_checker_catches_violations():
     # Allowed imports pass.
     assert violations("tools/x.py", "import math\nfrom app.tools.base import ToolError") == []
     assert violations("api/x.py", "from sqlalchemy.orm import Session") == []
-    assert violations("llm/x.py", "import anthropic") == []
+    assert violations("llm/x.py", "from google import genai") == []
+    assert violations("llm/x.py", "from google.genai import errors, types") == []

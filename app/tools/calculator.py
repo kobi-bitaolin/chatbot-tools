@@ -113,7 +113,8 @@ TOOL = Tool(
     name="calculator",
     description=(
         "Evaluate a math expression. Use for ANY arithmetic, percentages or math "
-        "functions. Never calculate in your head."
+        "functions, even trivial ones or ones you think have no answer (such as "
+        "division by zero): the tool reports the error. Never calculate in your head."
     ),
     parameters={
         "type": "object",
