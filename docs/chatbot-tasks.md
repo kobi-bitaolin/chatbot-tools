@@ -1,6 +1,6 @@
 # Chatbot Tools: Task List
 
-- **Spec:** `docs/chatbot-spec.md` v0.5 (Approved 2026-11-10; v0.5 adds NFR-12, AC-59..61)
+- **Spec:** `docs/chatbot-spec.md` v0.6 (Approved 2026-11-10; v0.5 adds NFR-12, AC-59..61; v0.6 removes `strict`, `thinking` and `LLM_EFFORT`)
 - **Status:** Approved (2026-11-10)
 - **Date:** 2026-11-10
 
@@ -25,7 +25,7 @@ Order: the assignment's tips (S1:419-424). Basic chat → calculator → tool lo
 | T-3 | `feat/basic-chat` | LLM client wrapper (lazy creation), fake LLM (scripted blocks and stop reasons, request recording, SDK errors), chat service without tools: send endpoint, content validation, D0 system prompt, first message, `last_message_at` | FR-6, FR-8, FR-9, FR-11, FR-20, FR-24 | 2, 3, 8, 9, 10, 11, 12, 22 | T-2 | **Opus** |
 | T-4 | `feat/calculator` | Calculator tool: `ast` whitelist, `^`, float-only math, finite checks, limits, all error strings | FR-27, NFR-5 | 31, 32, 33 | T-1 | **Opus** |
 | T-5 | `feat/mock-tools` | Web search mock (keyword results) and weather mock (injectable generator, ranges) | FR-28, FR-29 | 34, 35 | T-1 | Sonnet |
-| T-6 | `feat/tool-executor` | Tool base and registry (S1 format → `input_schema`, `strict`), `GET /tools`, executor core: module-level thread pool, `ToolResult`, error catching, request order; LLM request settings. **Layers:** import-boundary test, `LLMClient` takes plain values (not `Settings`), prompt tool names from the registry | FR-32, FR-33, FR-36, NFR-12, FR-24 | 42, 43, 59, 61 | T-3, T-4, T-5 | **Opus** |
+| T-6 | `feat/tool-executor` | Tool base and registry (S1 format → `input_schema`), `GET /tools`, executor core: module-level thread pool, `ToolResult`, error catching, request order; LLM request settings. **Layers:** import-boundary test, `LLMClient` takes plain values (not `Settings`), prompt tool names from the registry | FR-32, FR-33, FR-36, NFR-12, FR-24 | 42, 43, 59, 61 | T-3, T-4, T-5 | **Opus** |
 | T-7 | `feat/tool-loop` | The tool loop: rounds, all results in one message, `tool_use_id` pairing, `tools_used`, ToolExecution logging per round, token sum, `pending` → `complete`. **Layers:** `LLMClient` returns a neutral `LLMResult`. **Includes 4 of the 6 required tests** | FR-10, FR-12, FR-13, FR-14, FR-16, FR-19, FR-34, NFR-12 | 5, 13, 14, 16, 21, 44, 60 | T-6 | **Opus** |
 | T-8 | `feat/history` | Multi-turn replay rule (FR-21): `llm_blocks` stored as received, thinking removed on replay, 20-turn trim at turn boundaries. **Layers:** message → response mapping moves from the routes into `schemas.py`; AC-59 gains the routes/`app.models` rule. **Required test 5** | FR-21, FR-22, FR-23, NFR-12 | 23, 24, 25, 59 | T-7 | **Opus** |
 | T-9 | `feat/datetime-tool` | Datetime tool: current, convert, calculate, injected clock, per-operation checks, offsets, unknown timezone | FR-31, FR-17 (datetime part) | 40, 41 | T-6 | Sonnet |

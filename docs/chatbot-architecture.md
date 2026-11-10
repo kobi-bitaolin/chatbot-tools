@@ -38,7 +38,7 @@ Guiding rule: keep it as small as possible and explainable line by line. The des
 | Tools | `app/tools/calculator.py`, `web_search.py`, `weather.py`, `database.py`, `datetime_tool.py` | One file per tool, pure logic |
 | Storage | `app/db.py`, `app/models.py` | Engine, one session per request, ORM models (section 5) |
 | Sample DB | `app/sample_data.py` | Creates and seeds `sample.db` (section 5) |
-| Config | `app/config.py` | Settings: API key, model, effort, limits, DB paths |
+| Config | `app/config.py` | Settings: API key, model, limits, DB paths |
 
 ### 2.1 Layers and responsibilities (separation of concerns, NFR-12)
 
@@ -77,7 +77,7 @@ The executor wraps every run into a `ToolResult` in the S1:121-131 format, plus 
  "success": false, "error": "Division by zero", "execution_time_ms": 1}
 ```
 
-Format translation: S1 calls the schema `parameters`, while the Anthropic API calls it `input_schema`. The registry stores the S1 format and converts it in one place. Definitions set `strict: true` and `additionalProperties: false` (see R9).
+Format translation: S1 calls the schema `parameters`, while the Anthropic API calls it `input_schema`. The registry stores the S1 format and renames `parameters` to `input_schema` in one place; the schema itself is sent unchanged (spec v0.6: no `strict` mode, since S1 doesn't ask for it and the executor validates every input anyway).
 
 ### 3.2 Executor
 
@@ -252,7 +252,7 @@ It is stored once per conversation and **never contains changing values** such a
 Why: current Claude models reject a replayed thinking block if earlier history changed (the "history-editing check"). Dropping all earlier thinking blocks is allowed, and after that, trimming old turns is safe whatever the account age. Within one turn, thinking blocks are passed back unchanged, which tool use requires. Summarizing old turns (REQ-45) is on the "if time" list.
 
 **D6: Model settings.**
-- Adaptive thinking (the default on Claude Opus 5.5), with `effort` set explicitly from env (`LLM_EFFORT`, default `medium`), and `max_tokens` 16,000.
+- No `thinking` parameter (spec v0.6): Claude Opus 5.5 thinks adaptively by default and can't turn it off, so thinking blocks still arrive and the replay rule above still applies. `effort` is fixed at `medium` in code (explicit, so a changed API default can't change behavior), and `max_tokens` is 16,000.
 - Refusals are handled with a plain `stop_reason` check (section 4, step 5). No beta features are used. The API's automatic refusal fallback is possible future work.
 
 **D7: Token tracking (REQ-42).** Sum `input_tokens + output_tokens` over every LLM round in the turn, store it on the assistant message, and return it as `tokens_used`. Prompt caching is not used, so there are no cache token fields to add.
@@ -286,7 +286,7 @@ Why: current Claude models reject a replayed thinking block if earlier history c
   - Uvicorn on port 8000, with a health check on `/health`.
 - **docker-compose.yml:**
   - One service, `api`, with port `8000:8000`.
-  - `env_file: .env` provides `ANTHROPIC_API_KEY`, `LLM_MODEL` and `LLM_EFFORT`.
+  - `env_file: .env` provides `ANTHROPIC_API_KEY` and `LLM_MODEL`.
   - The named volume `chatbot-data` is mounted at `/app/data`.
 - **Tests in Docker:** `docker compose run --rm api pytest`. No API key is needed, because the fake LLM is used.
 
@@ -314,7 +314,7 @@ With this, all 6 required tests (S1:348-354) and every failure path can be teste
 | R6 | Timezones fail in Docker | `tzdata`; a datetime convert check inside the container in the skeleton task |
 | R7 | Flaky tests | Fake LLM, fixed seeds, injected clock and seed date, no network |
 | R8 | API cost during manual tests | Few manual checks; model switchable via `LLM_MODEL` |
-| R9 | `strict: true` may reject some schema features | The executor validates every input itself with `jsonschema` anyway. Spec v0.4: the registry removes the keywords strict mode doesn't support (`maxLength` etc.) from `input_schema`. If the API still rejects a schema, drop `strict` for that tool |
+| R9 | ~~`strict: true` may reject some schema features~~ Closed in spec v0.6: `strict` is not used | The executor validates every input itself with `jsonschema` anyway. Spec v0.4: the registry removes the keywords strict mode doesn't support (`maxLength` etc.) from `input_schema`. If the API still rejects a schema, drop `strict` for that tool |
 | R10 | Fake LLM drifts from the real response shape | The fake uses the same block types and stop reasons as the SDK, plus one real-LLM smoke check per stage-5 run |
 | R11 | Orphan rows after delete/reset | ORM cascade + a test that counts rows after delete and reset |
 | R12 | Non-root user can't write the volume | `chown` in the Dockerfile; checked in the skeleton task by starting compose and creating a conversation |
