@@ -17,16 +17,28 @@ from app.config import Settings
 from app.db import Base, make_engine, make_session_factory
 from app.llm.client import LLMClient
 from app.services.conversations import ConversationNotFoundError
+from app.tools.registry import ToolRegistry, default_registry
 
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def build_llm(settings: Settings, sdk=None) -> LLMClient:
+    """Wiring: read the settings here, so the LLM client never imports config (NFR-12)."""
+    return LLMClient(
+        api_key=settings.anthropic_api_key,
+        model=settings.llm_model,
+        effort=settings.llm_effort,
+        sdk=sdk,
+    )
+
+
 def create_app(
     settings: Settings | None = None,
     clock: Callable[[], datetime] | None = None,
     llm=None,
+    registry: ToolRegistry | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
@@ -38,7 +50,8 @@ def create_app(
     app.state.settings = settings
     app.state.session_factory = make_session_factory(engine)
     app.state.clock = clock or utc_now
-    app.state.llm = llm or LLMClient(settings)  # the SDK client itself is created lazily
+    app.state.llm = llm or build_llm(settings)  # the SDK client itself is created lazily
+    app.state.registry = registry or default_registry()
 
     @app.exception_handler(ConversationNotFoundError)
     def conversation_not_found(request: Request, error: ConversationNotFoundError):

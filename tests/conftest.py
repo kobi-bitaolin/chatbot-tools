@@ -18,6 +18,10 @@ from app.main import create_app
 from tests.fake_llm import FakeLLM
 
 
+# The registered tools, in registry order. Grows to 5 in T-9 (datetime) and T-10 (database).
+EXPECTED_TOOLS = ["calculator", "web_search", "weather"]
+
+
 class NetworkBlockedError(RuntimeError):
     """Raised when a test tries to open a network connection."""
 

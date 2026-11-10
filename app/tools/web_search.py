@@ -6,6 +6,8 @@ empty list otherwise. No network and no API key are needed.
 
 import re
 
+from app.tools.base import Tool
+
 # keyword -> results. A query matches a keyword when it contains it as a word.
 RESULTS = {
     "python": [
@@ -65,3 +67,17 @@ def run(query: str) -> dict:
         if keyword in words:
             results.extend(items)
     return {"results": results}
+
+
+TOOL = Tool(
+    name="web_search",
+    description="Search the web for current information. Returns titles, snippets and URLs.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "The search query", "maxLength": 300}
+        },
+        "required": ["query"],
+    },
+    run=run,
+)
