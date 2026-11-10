@@ -1,6 +1,7 @@
 """Tool registry, GET /tools and the LLM request settings (T-6).
 
 FR-32 (AC-42), FR-33 + FR-36 (AC-43), NFR-12 + FR-24 (AC-61).
+Spec v0.6: no `strict`, no `thinking`, effort fixed at medium.
 """
 
 from fastapi.testclient import TestClient
@@ -11,17 +12,6 @@ from app.tools import calculator
 from app.tools.registry import ToolRegistry
 from tests.conftest import EXPECTED_TOOLS
 from tests.fake_llm import FakeLLM, text_response
-
-STRICT_UNSUPPORTED = {"maxLength", "minLength", "minimum", "maximum", "multipleOf"}
-
-
-def keys_anywhere(schema) -> set:
-    """Every dict key in a nested schema."""
-    if isinstance(schema, dict):
-        return set(schema) | set().union(*(keys_anywhere(v) for v in schema.values()))
-    if isinstance(schema, list):
-        return set().union(*(keys_anywhere(v) for v in schema))
-    return set()
 
 
 def start_turn(client, content="Hi"):
@@ -66,29 +56,29 @@ def request_sent(settings) -> dict:
 
 def test_ac_43_llm_request_settings(tmp_path, monkeypatch):
     monkeypatch.setenv("LLM_MODEL", "test-model")
-    monkeypatch.setenv("LLM_EFFORT", "low")
-    request = request_sent(Settings(data_dir=tmp_path / "a"))
+    settings = Settings(data_dir=tmp_path / "a")
+    request = request_sent(settings)
 
     assert request["model"] == "test-model"
     assert request["max_tokens"] == 16_000
-    assert request["thinking"] == {"type": "adaptive"}
-    assert request["output_config"] == {"effort": "low"}
+    assert request["output_config"] == {"effort": "medium"}
+    assert "thinking" not in request  # the model's own default applies (FR-36)
     assert request["tool_choice"] == {"type": "auto"}
 
-    tools = request["tools"]
-    assert [t["name"] for t in tools] == EXPECTED_TOOLS
-    for tool in tools:
-        assert set(tool) == {"name", "description", "input_schema", "strict"}
-        assert tool["strict"] is True
-        assert tool["input_schema"]["additionalProperties"] is False
-        assert not keys_anywhere(tool["input_schema"]) & STRICT_UNSUPPORTED
+    # Each tool is sent as {name, description, input_schema}, with the
+    # S1 `parameters` unchanged (FR-33): the same schema GET /tools shows.
+    with TestClient(create_app(settings)) as client:
+        listed = client.get("/tools").json()["tools"]
+    assert request["tools"] == [
+        {"name": t["name"], "description": t["description"], "input_schema": t["parameters"]}
+        for t in listed
+    ]
+    assert [t["name"] for t in request["tools"]] == EXPECTED_TOOLS
 
-    # Defaults when neither variable is set.
+    # Default model when LLM_MODEL is not set.
     monkeypatch.delenv("LLM_MODEL")
-    monkeypatch.delenv("LLM_EFFORT")
     request = request_sent(Settings(data_dir=tmp_path / "b"))
     assert request["model"] == "claude-opus-5-5"
-    assert request["output_config"] == {"effort": "medium"}
 
 
 def test_ac_61_prompt_tools_from_registry(settings):

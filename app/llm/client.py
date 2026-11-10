@@ -3,22 +3,24 @@
 The chat service only calls `complete(...)`. Tests swap this class for the
 fake LLM in tests/fake_llm.py, which has the same method.
 
-It gets plain values (key, model, effort), not the app's Settings, so it
-doesn't depend on the rest of the app (NFR-12). app/main.py does the wiring.
+It gets plain values (key, model), not the app's Settings, so it doesn't
+depend on the rest of the app (NFR-12). app/main.py does the wiring.
 """
 
 import anthropic
 from anthropic.types import Message
 
 MAX_TOKENS = 16_000  # FR-36
+# FR-36: medium is Claude Opus 5.5's default; set explicitly so a changed
+# API default can't silently change the app's behavior.
+EFFORT = "medium"
 
 
 class LLMClient:
-    def __init__(self, api_key: str | None, model: str, effort: str, sdk=None):
+    def __init__(self, api_key: str | None, model: str, sdk=None):
         """`sdk` replaces the real `anthropic.Anthropic` client (tests pass a recording stub)."""
         self._api_key = api_key
         self._model = model
-        self._effort = effort
         self._sdk = sdk
 
     def _client(self) -> anthropic.Anthropic:
@@ -33,8 +35,7 @@ class LLMClient:
         request = {
             "model": self._model,
             "max_tokens": MAX_TOKENS,
-            "thinking": {"type": "adaptive"},  # FR-36: the model decides how much to think
-            "output_config": {"effort": self._effort},
+            "output_config": {"effort": EFFORT},
             "system": system,
             "messages": messages,
         }

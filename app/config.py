@@ -16,7 +16,6 @@ class Settings(BaseSettings):
     # Only needed when the real LLM is called; the app starts without it.
     anthropic_api_key: str | None = None
     llm_model: str = "claude-opus-5-5"
-    llm_effort: str = "medium"
 
     # Folder holding app.db and sample.db (a Docker volume in production).
     data_dir: Path = Path("data")

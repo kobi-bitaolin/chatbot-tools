@@ -29,7 +29,6 @@ def build_llm(settings: Settings, sdk=None) -> LLMClient:
     return LLMClient(
         api_key=settings.anthropic_api_key,
         model=settings.llm_model,
-        effort=settings.llm_effort,
         sdk=sdk,
     )
 
