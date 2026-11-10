@@ -10,11 +10,6 @@ from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
 
-# Allowed for now, removed when its task fixes the leak.
-KNOWN_EXCEPTIONS = {
-    ("api/routes.py", "app.models"),  # T-8 moves the message mapping into schemas.py
-}
-
 
 def imports_of(source: str) -> list[tuple[str, str | None]]:
     """(module, imported name) pairs. `from app import models` gives ("app.models", None)."""
@@ -50,8 +45,6 @@ def violations(path: str, source: str) -> list[str]:
     layer = path.split("/")[0] if "/" in path else ""
     problems = []
     for module, name in imports_of(source):
-        if (path, module) in KNOWN_EXCEPTIONS:
-            continue
         where = f"{path}: {module}" + (f".{name}" if name else "")
 
         if is_llm_sdk(module, name) and layer != "llm":

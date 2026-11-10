@@ -5,6 +5,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, StringConstraints, field_validator
 
+from app.models import Message
+
 MAX_SYSTEM_PROMPT_CHARS = 4000
 MAX_CONTENT_CHARS = 10_000
 
@@ -49,6 +51,21 @@ class MessageOut(BaseModel):
     status: str | None = None
     tools_used: list | None = None
     tokens_used: int | None = None
+
+
+def message_out(message: Message) -> dict:
+    """A stored message → its MessageOut fields (NFR-12: mapping lives here, not in routes).
+
+    User messages get no assistant-only keys, so they stay out of the JSON.
+    """
+    data = {"role": message.role, "content": message.content, "created_at": message.created_at}
+    if message.role == "assistant":
+        data.update(
+            status=message.status,
+            tools_used=message.tools_used,
+            tokens_used=message.tokens_used,
+        )
+    return data
 
 
 class ConversationDetail(BaseModel):

@@ -11,7 +11,6 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app import schemas
-from app.models import Message
 from app.services import chat
 from app.services import conversations as service
 
@@ -78,17 +77,6 @@ def list_conversations(session: Session = Depends(get_session)):
     }
 
 
-def message_to_dict(message: Message) -> dict:
-    data = {"role": message.role, "content": message.content, "created_at": message.created_at}
-    if message.role == "assistant":
-        data.update(
-            status=message.status,
-            tools_used=message.tools_used,
-            tokens_used=message.tokens_used,
-        )
-    return data
-
-
 @router.get(
     "/conversations/{conversation_id}",
     response_model=schemas.ConversationDetail,
@@ -100,7 +88,7 @@ def get_conversation(conversation_id: str, session: Session = Depends(get_sessio
         "id": conversation.id,
         "system_prompt": conversation.system_prompt,
         "created_at": conversation.created_at,
-        "messages": [message_to_dict(message) for message in conversation.messages],
+        "messages": [schemas.message_out(message) for message in conversation.messages],
     }
 
 

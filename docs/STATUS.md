@@ -11,13 +11,13 @@
   - **Standing yes (2026-11-10):** push `main` to `origin` after every merged task. Anything else (other branches, force-push, changing visibility, adding collaborators) needs a fresh yes. Make it public / share only at stage 6 with a fresh yes.
   - **Merges need a yes per task** (2026-11-10: the user declined a standing yes for merge + branch delete).
   - **Scope (2026-11-10):** build strictly what S1 asks, nothing else. `Message.status` kept (user's choice) as the way to handle failed turns (S1:328).
-- **Current stage:** 4b, TDD implementation, T-1..T-7b done and merged; next T-8
+- **Current stage:** 4b, TDD implementation, T-1..T-7b merged; T-8 done on `feat/history`, waiting for merge yes
 - **Last updated:** 2026-11-10
 
 ## Next action
-Stages 1-3 and the task list approved 2026-11-10. T-1..T-6 done and merged (T-6 merged 2026-11-10, incl. the v0.6 scope cuts; FR-26 kept in full after the scope review). T-7 (tool loop + neutral `LLMResult`) merged 2026-11-10, all 65 tests green, mutation-checked. Milestone 2 reached. **Provider change (2026-11-10):** the user switched the LLM to Google Gemini; **spec v0.7 approved 2026-11-10** (D9, FR-37, AC-62/63, task T-7b). Real Gemini checked with a scratchpad probe (key in `.env`): single tool, two tools in one round, no tools, tool error all work. Risk R1 fixed in v0.7 (calculator description + D0 wording; 25/25 real runs use the calculator). T-7b done 2026-11-10: Gemini client (`google-genai==3.0.0`, `anthropic` removed), internal format ↔ Gemini translation, `LLMUnavailableError`; 77 tests green locally and in Docker (no key), mutation-checked; whole app checked with real Gemini (two tools in one round, tool error, no tools). T-7b merged 2026-11-10. **Now: T-8** (history, Opus, branch `feat/history`, not created yet). Note: until T-11 adds the round limit (FR-15), the loop has no cap.
+Stages 1-3 and the task list approved 2026-11-10. T-1..T-6 done and merged (T-6 merged 2026-11-10, incl. the v0.6 scope cuts; FR-26 kept in full after the scope review). T-7 (tool loop + neutral `LLMResult`) merged 2026-11-10, all 65 tests green, mutation-checked. Milestone 2 reached. **Provider change (2026-11-10):** the user switched the LLM to Google Gemini; **spec v0.7 approved 2026-11-10** (D9, FR-37, AC-62/63, task T-7b). Real Gemini checked with a scratchpad probe (key in `.env`): single tool, two tools in one round, no tools, tool error all work. Risk R1 fixed in v0.7 (calculator description + D0 wording; 25/25 real runs use the calculator). T-7b done 2026-11-10: Gemini client (`google-genai==3.0.0`, `anthropic` removed), internal format ↔ Gemini translation, `LLMUnavailableError`; 77 tests green locally and in Docker (no key), mutation-checked; whole app checked with real Gemini (two tools in one round, tool error, no tools). T-7b merged 2026-11-10. Manual end-to-end tests by the user on `main` (before T-8): all passed. T-8 done 2026-11-10 on `feat/history`: history replay (FR-21..23), message mapping moved to `schemas.py`, AC-59 exception removed; 80 tests green locally and in Docker (no key), mutation-checked (thinking filter, trim, final-answer source); real Gemini 4-turn chat with tools replays fine (all HTTP 200, follow-ups use earlier turns). **Now: merge T-8 (needs yes), then T-9** (datetime tool, Sonnet). Note: until T-11 adds the round limit (FR-15), the loop has no cap.
 
-Separation of concerns (spec v0.5, NFR-12): rules in `CLAUDE.md` and architecture §2.1, enforced by `tests/test_architecture.py` (AC-59). Leak fixes: T-6 done (`LLMClient` takes plain values; prompt tool names from the registry), T-7 `LLMResult`, T-8 message mapping into `schemas.py` (then remove the `KNOWN_EXCEPTIONS` entry in the test). D8: no repository layer.
+Separation of concerns (spec v0.5, NFR-12): rules in `CLAUDE.md` and architecture §2.1, enforced by `tests/test_architecture.py` (AC-59). Leak fixes: T-6 done (`LLMClient` takes plain values; prompt tool names from the registry), T-7 `LLMResult`, T-8 message mapping into `schemas.py` (done; `KNOWN_EXCEPTIONS` removed). D8: no repository layer.
 
 ## Open questions
 | # | Question | Blocking? |
@@ -50,7 +50,8 @@ See `docs/chatbot-tasks.md`.
 | T-6 tool executor | done 2026-11-10 |
 | T-7 tool loop | done 2026-11-10 (merged) |
 | T-7b Gemini switch | done 2026-11-10 (merged) |
-| T-8..T-13 | not started |
+| T-8 history | done 2026-11-10 (branch, not merged) |
+| T-9..T-13 | not started |
 
 ## AI usage log
 `docs/ai-usage-log.md` (entries so far: 16)
@@ -60,7 +61,8 @@ See `docs/chatbot-tasks.md`.
 - Also pass: AC-31, AC-32, AC-34, AC-35, AC-61 (T-6)
 - Also pass: AC-5, AC-13, AC-14, AC-16, AC-21, AC-44, AC-60 (T-7; 4 of the 6 required tests)
 - T-7b (Gemini, spec v0.7): AC-62, AC-63 pass; AC-43, AC-47, AC-59, AC-60 rewritten for Gemini and pass. Docker suite: 77 passed without a key (NFR-3). `.env` port fixed by the user to `API_PORT=8001`; real container checked on it with real Gemini (two tools, tool error, no tools: all HTTP 200)
-- Partly: AC-10, AC-42, AC-43 (all pass for the 3 registered tools; "5 tools" once T-9/T-10 add datetime and database); AC-59 (passes; the routes/`app.models` rule is a known exception until T-8); AC-33 (attack inputs and no `eval(`/`exec(` pass; the 201-char "Invalid input:" check goes through the executor's schema validation, added in T-11)
+- T-8: AC-23 (required test 5), AC-24, AC-25 pass; AC-59 now passes in full (no exceptions)
+- Partly: AC-10, AC-42, AC-43 (all pass for the 3 registered tools; "5 tools" once T-9/T-10 add datetime and database); AC-33 (attack inputs and no `eval(`/`exec(` pass; the 201-char "Invalid input:" check goes through the executor's schema validation, added in T-11)
 - Milestone 1 Docker smoke test (T-3): `/health` ok, create conversation ok, blank content → 422, send without a key → 500 + stuck `pending` (Q5)
 - Early Docker checks (T-1): health OK, runs as non-root `app`, writes `app.db` to the volume, `tzdata` timezones OK, healthcheck `healthy`
 - Not run yet: the rest
