@@ -7,10 +7,12 @@ Every test runs with:
 - the fake LLM in the `client` fixture (tests never reach the real LLM).
 """
 
+import os
 import socket
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from dotenv import dotenv_values
 from fastapi.testclient import TestClient
 
 from app.config import Settings
@@ -20,6 +22,21 @@ from tests.fake_llm import FakeLLM
 
 # The registered tools, in registry order (all 5 since T-10).
 EXPECTED_TOOLS = ["calculator", "web_search", "weather", "datetime", "database_query"]
+
+
+# T-13: the real key, read once at import (before the fixtures below clear it
+# for every normal test): from the environment, or from the local .env file.
+REAL_API_KEY = os.environ.get("GEMINI_API_KEY") or dotenv_values(".env").get("GEMINI_API_KEY")
+
+
+def pytest_collection_modifyitems(config, items):
+    """Tests marked `real_llm` are skipped when there is no key (AC-47, NFR-3)."""
+    if REAL_API_KEY:
+        return
+    skip = pytest.mark.skip(reason="real_llm test: set GEMINI_API_KEY (env or .env)")
+    for item in items:
+        if "real_llm" in item.keywords:
+            item.add_marker(skip)
 
 
 class NetworkBlockedError(RuntimeError):
@@ -42,7 +59,9 @@ class TickingClock:
 
 
 @pytest.fixture(autouse=True)
-def no_api_key(monkeypatch):
+def no_api_key(monkeypatch, request):
+    if request.node.get_closest_marker("real_llm"):
+        return  # this test is meant to use the real key
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)  # the Gemini SDK reads this one too
 
@@ -51,7 +70,9 @@ LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
 
 
 @pytest.fixture(autouse=True)
-def block_network(monkeypatch):
+def block_network(monkeypatch, request):
+    if request.node.get_closest_marker("real_llm"):
+        return  # this test is meant to reach Gemini
     # Loopback must stay allowed: on Windows, asyncio's event loop connects a
     # socket pair to 127.0.0.1 internally. Everything else is blocked.
     real_connect = socket.socket.connect
