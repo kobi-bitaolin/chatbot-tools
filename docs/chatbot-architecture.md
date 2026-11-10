@@ -14,8 +14,8 @@ Guiding rule: keep it as small as possible and explainable line by line. The des
 | Choice | Decision | Why | Rejected alternative |
 |---|---|---|---|
 | Language | **Python 3.12** (Docker image `python:3.12-slim`) | Fixed by S1:341 (3.11+). 3.12 is stable and has good error messages | 3.13: newer, and some libraries lag behind |
-| Web framework | **FastAPI** + Uvicorn, **plain `def` routes** (not `async def`) | Pydantic validation (part of REQ-30), automatic `/docs` page, `TestClient`. Plain `def` routes run in FastAPI's thread pool, so the synchronous Anthropic SDK never blocks the server | `async def` routes: calling the sync SDK inside them would freeze every other request. Flask: no built-in validation |
-| LLM | **Claude via the official `anthropic` Python SDK**, model from env `LLM_MODEL`, default `claude-opus-5-5` | Native function calling, typed errors, usage counts. A cheaper model is a one-line `.env` change; your decision | LangChain/agent frameworks: they hide the tool loop the interview asks about (S1:27) |
+| Web framework | **FastAPI** + Uvicorn, **plain `def` routes** (not `async def`) | Pydantic validation (part of REQ-30), automatic `/docs` page, `TestClient`. Plain `def` routes run in FastAPI's thread pool, so the synchronous LLM SDK never blocks the server | `async def` routes: calling the sync SDK inside them would freeze every other request. Flask: no built-in validation |
+| LLM | **Google Gemini via the official `google-genai` Python SDK** (`generate_content`), model from env `LLM_MODEL`, default `gemini-3.1-flash-lite` (D9) | Native function calling, typed errors, usage counts, very low price. Spec v0.7: replaced Claude (the user's credits are for Gemini) | LangChain/agent frameworks: they hide the tool loop the interview asks about (S1:27) |
 | Tool loop | **Hand-written loop** | Needed for per-call timeouts, DB logging, a max-rounds limit, and the exact `tools_used` format. Shows you understand function calling | SDK Tool Runner (beta): less code, but a "black box" for the interview |
 | App storage | **SQLite + SQLAlchemy 2.0**, file on a Docker volume | Zero setup, survives restarts (G10), models map 1:1 to the S1 data model | PostgreSQL: an extra container with no benefit at this size |
 | Sample data | **Separate SQLite file** `sample.db` | The DB tool can never touch conversations (security) | Same file as app data |
@@ -48,8 +48,8 @@ Each layer has one job, so it has one reason to change.
 |---|---|---|---|
 | HTTP | `app/api/` | Parse requests, call a service, shape the response | Hold business rules, query the DB, import `app.models` (from T-8) |
 | Validation | `app/schemas.py` | Request/response shapes, including the DB-row → response mapping (from T-8) | Touch the DB |
-| Business rules | `app/services/` | Conversations and one chat turn (orchestration) | Import `fastapi` or `anthropic`; read SDK objects |
-| LLM | `app/llm/` | Talk to the provider; turn its response into a neutral `LLMResult` (from T-7) | Import `app.config` (it gets plain values) |
+| Business rules | `app/services/` | Conversations and one chat turn (orchestration) | Import `fastapi` or `google.genai`; read SDK objects |
+| LLM | `app/llm/` | Talk to the provider; translate the internal message format to the provider's and back into a neutral `LLMResult` (FR-37); turn SDK errors into `LLMUnavailableError` | Import `app.config` (it gets plain values) |
 | Tools | `app/tools/` | Pure tool logic, registry, executor | Import anything from the app outside `app.tools` |
 | Data | `app/db.py`, `app/models.py` | Tables, engine, sessions | Hold rules |
 | Wiring | `app/main.py`, `app/config.py` | Read settings, build the objects, connect the layers, map service errors to HTTP codes | Hold rules |
@@ -77,7 +77,7 @@ The executor wraps every run into a `ToolResult` in the S1:121-131 format, plus 
  "success": false, "error": "Division by zero", "execution_time_ms": 1}
 ```
 
-Format translation: S1 calls the schema `parameters`, while the Anthropic API calls it `input_schema`. The registry stores the S1 format and renames `parameters` to `input_schema` in one place; the schema itself is sent unchanged (spec v0.6: no `strict` mode, since S1 doesn't ask for it and the executor validates every input anyway).
+Format translation: S1 calls the schema `parameters`; the internal format calls it `input_schema`, and `app/llm` sends it to Gemini as `parameters_json_schema` (FR-33). The registry stores the S1 format and renames `parameters` to `input_schema` in one place; the schema itself is sent unchanged (spec v0.6: no `strict` mode, since S1 doesn't ask for it and the executor validates every input anyway).
 
 ### 3.2 Executor
 
@@ -152,7 +152,7 @@ content is stripped). Then:
 | Unexpected stop reason | Status "error", HTTP 502 | robustness |
 | Conversation not found | 404 | REQ-19/20 |
 
-Why all results go back in one message: the Claude docs say that splitting parallel results across messages teaches the model to stop making parallel calls (REQ-29).
+Why all results go back in one message: one round's calls belong together, and the provider docs pair each result with its call by `id` (REQ-29).
 
 ## 5. Data model
 
@@ -221,13 +221,13 @@ chatbot-tools/
 ## 8. Key decisions (for the README, S1:313-321)
 
 **D0: System prompt.** The text sent to the LLM is always built the same way:
-- our fixed app instructions (for example "Use a tool whenever it gives a more accurate answer than you can"),
+- our fixed app instructions (for example "Use a tool whenever it gives a more accurate answer than you can", and "never answer a math question from your own knowledge, even a trivial or impossible one such as division by zero: call the calculator", added for risk R1 in spec v0.7),
 - then a blank line,
 - then the client's `system_prompt` from `POST /conversations`, or "You are a helpful assistant." when none was given.
 
 It is stored once per conversation and **never contains changing values** such as today's date. So it's byte-identical every turn, which keeps replay valid (D5). The LLM gets the date from the datetime tool or from SQL `date('now')`.
 
-**D1: Tool selection.** The LLM decides, from the tool descriptions and the D0 instructions, with `tool_choice: auto`. Each description says what the tool does and when to use it, for example: "Use for any arithmetic; never calculate in your head." Current Claude Opus/Sonnet models reject *forced* tool choice with a 400, so `auto` with good descriptions is the right approach.
+**D1: Tool selection.** The LLM decides, from the tool descriptions and the D0 instructions, with `tool_choice: auto`. Each description says what the tool does and when to use it, for example: "Use for any arithmetic; never calculate in your head." `auto` (Gemini mode `AUTO`) with good descriptions lets the model skip tools when none are needed (S1:327).
 
 **D2: Multiple tools.** The model can request several tools in one round. We run them concurrently, return all results in one message in request order, and the model combines them. A chain (for example search → calculator) is another round, up to 5. After that, a final call with `tool_choice: none` forces a text answer.
 
@@ -249,10 +249,10 @@ It is stored once per conversation and **never contains changing values** such a
 - Later turns replay the stored user messages plus each turn's tool calls and results (`llm_blocks`), but **not the model's earlier thinking blocks**, and only for `complete` turns.
 - Long chats send only the last `MAX_HISTORY_TURNS` (20) turns, cut at turn boundaries so a tool call never loses its result.
 
-Why: current Claude models reject a replayed thinking block if earlier history changed (the "history-editing check"). Dropping all earlier thinking blocks is allowed, and after that, trimming old turns is safe whatever the account age. Within one turn, thinking blocks are passed back unchanged, which tool use requires. Summarizing old turns (REQ-45) is on the "if time" list.
+Why: earlier thinking isn't needed to continue the chat, and dropping it keeps replay short and simple. Within one turn, thought parts and every `thought_signature` are passed back unchanged, which Gemini function calling requires (A3). Summarizing old turns (REQ-45) is on the "if time" list.
 
 **D6: Model settings.**
-- No `thinking` parameter (spec v0.6): Claude Opus 5.5 thinks adaptively by default and can't turn it off, so thinking blocks still arrive and the replay rule above still applies. `effort` is fixed at `medium` in code (explicit, so a changed API default can't change behavior), and `max_tokens` is 16,000.
+- No thinking settings (spec v0.7): the model's default applies, and any thought parts are handled by the replay rule above. `max_output_tokens` is 16,000.
 - Refusals are handled with a plain `stop_reason` check (section 4, step 5). No beta features are used. The API's automatic refusal fallback is possible future work.
 
 **D7: Token tracking (REQ-42).** Sum `input_tokens + output_tokens` over every LLM round in the turn, store it on the assistant message, and return it as `tokens_used`. Prompt caching is not used, so there are no cache token fields to add.
@@ -286,7 +286,7 @@ Why: current Claude models reject a replayed thinking block if earlier history c
   - Uvicorn on port 8000, with a health check on `/health`.
 - **docker-compose.yml:**
   - One service, `api`, with port `8000:8000`.
-  - `env_file: .env` provides `ANTHROPIC_API_KEY` and `LLM_MODEL`.
+  - `env_file: .env` provides `GEMINI_API_KEY` and `LLM_MODEL`.
   - The named volume `chatbot-data` is mounted at `/app/data`.
 - **Tests in Docker:** `docker compose run --rm api pytest`. No API key is needed, because the fake LLM is used.
 
@@ -306,7 +306,7 @@ With this, all 6 required tests (S1:348-354) and every failure path can be teste
 
 | # | Risk | Early check |
 |---|---|---|
-| R1 | The LLM does math in its head instead of calling the calculator | Manual real-LLM check in the tool-loop task; tune descriptions and D0 |
+| R1 | The LLM does math in its head instead of calling the calculator | Manual real-LLM check in the tool-loop task; tune descriptions and D0. Seen 2026-11-10 on Gemini for "What is 1/0?" (0/3); fixed in spec v0.7 by stronger wording, measured with a repeated real check |
 | R2 | Calculator abuse (eval, huge powers, deep nesting) | Attack-input unit tests (`__import__`, `9**9**9`, long input) |
 | R3 | DB tool modifies data or reads app data | Tests that INSERT/DROP/ATTACH/PRAGMA and multiple statements are rejected; separate file |
 | R4 | A slow tool blocks the response | Executor test with a deliberately slow fake tool: the response returns in < 1.5 × the timeout |
@@ -324,6 +324,7 @@ With this, all 6 required tests (S1:348-354) and every failure path can be teste
 - **C1: database tool input:** the LLM writes SQL, and the tool runs it read-only (section 3.3, D4). This is a documented deviation from S1:204.
 - **C2: limits:** tool timeout 5 s per round, max 5 tool rounds, max 20 history turns, DB row limit 100, message max 10,000 chars, expression max 200 chars, 8 executor workers.
 - **C3: refusal fallback beta:** not used (D6). Plain refusal check only.
+- **D9: LLM provider Google Gemini (2026-11-10, spec v0.7):** the user's credits are for Gemini. `google-genai` with `generate_content` (stateless: we send the history ourselves, as D5 needs). Google labels `generate_content` "legacy" but fully supported; the newer Interactions API was not chosen: it is built around server-side conversation state (`previous_interaction_id`), while our design stores and replays history itself, and `generate_content` is the simpler fit for that. The service keeps one internal message format, and only `app/llm` translates it (FR-37), so a provider change touches `app/llm` and two settings only. Model `gemini-3.1-flash-lite` ($0.25 / $1.50 per 1M tokens, free tier available). No switch between providers: S1 doesn't ask for one.
 - **D8: no separate data-access (repository) layer (2026-11-10):** the services call the SQLAlchemy session and `commit()` themselves. At this size a repository layer would add a file per table and no real benefit; the session is still injected, so tests use temp files. Revisit if a second storage backend is ever needed.
 
 ## 14. Review log

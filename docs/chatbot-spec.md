@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 0.6 |
+| **Version** | 0.7 |
 | **Status** | Approved (2026-11-10) |
 | **Date** | 2026-11-10 |
 
@@ -16,7 +16,7 @@
 
 ## 2. Summary and scope
 
-A FastAPI chatbot API where Claude decides when to call 5 tools (calculator, web search, weather, database query, date/time), with conversation management, tool execution logging and Docker.
+A FastAPI chatbot API where the LLM (Google Gemini) decides when to call 5 tools (calculator, web search, weather, database query, date/time), with conversation management, tool execution logging and Docker.
 
 - **In scope:** all Must items of S1, plus tool timeouts, input validation and token tracking (S2 §7 Q1).
 - **Out of scope for now ("if time"):** streaming (REQ-39), custom tool registration, analytics, summarization, rate limiting (REQ-43..46), a real weather API. A UI and authentication are out of scope entirely (S2 §4).
@@ -47,12 +47,12 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 |---|---|---|---|
 | FR-8 | `POST /conversations/{id}/messages` with `{"content"}` must return 200 `{message: {role: "assistant", content}, tools_used: [...], tokens_used}` | M | S1:142-164, S1:225-241, G2 |
 | FR-9 | `content` must be stripped of surrounding spaces and be 1-10,000 characters, otherwise 422. Body validation happens before the 404 check | M | S3 §4, §6 |
-| FR-10 | Every LLM call must include all 5 tool definitions with `tool_choice: auto` (except the final call in FR-15). The LLM decides whether to use tools | M | S1:60, D1 |
+| FR-10 | Every LLM call must include all 5 tool definitions with tool choice `auto` (Gemini function-calling mode `AUTO`), except the final call in FR-15. The LLM decides whether to use tools | M | S1:60, D1 |
 | FR-11 | When the LLM answers without tools, the API must return its text with `tools_used: []` after exactly one LLM call | M | S1:327 |
 | FR-12 | When the LLM requests tools, the system must run them, send the results back, and repeat until the LLM gives a final answer | M | S1:59-63 |
 | FR-13 | All tool calls of one round must run, and their results must go back to the LLM in **one** user message, **in the order the LLM requested them**. `tools_used` must use the same order | M | S1:329, D2, S3 §3.2 |
 | FR-14 | Each `tools_used` item must be `{tool, input, output, success, error, execution_time_ms}`. `output` is null and `error` is text on failure; `output` is set and `error` is null on success | M | S1:121-131, G3 |
-| FR-15 | After 5 tool rounds, if the LLM requests tools again, those calls must not run. Each must get the error result "Tool call limit reached" (`success: false`, `execution_time_ms: 0`), be included in `tools_used` and logged as a ToolExecution, and one final LLM call must be made with `tool_choice: none` | M | S1:332, S3 §4 |
+| FR-15 | After 5 tool rounds, if the LLM requests tools again, those calls must not run. Each must get the error result "Tool call limit reached" (`success: false`, `execution_time_ms: 0`), be included in `tools_used` and logged as a ToolExecution, and one final LLM call must be made with tool choice `none` (Gemini mode `NONE`) | M | S1:332, S3 §4 |
 | FR-16 | A tool error, an invalid input, an unknown tool name or a timeout must never fail the request. The result must go to the LLM with `is_error: true` and the error text | M | S1:328, S1:330, D3 |
 | FR-17 | Tool input must be validated against the tool's JSON Schema, plus the per-operation datetime checks, before running. A failure gives an error result starting with "Invalid input:" | S | S1:330, S1:360 |
 | FR-18 | The tools of one round share a deadline of `TOOL_TIMEOUT_S` (default 5). A call still running at the deadline gets the error "Timed out after {N}s", where N is formatted with Python's `{:g}` (5.0 → "5", 0.5 → "0.5"). Other calls in the round keep their results | S | S1:331, S1:359, G9 |
@@ -70,8 +70,8 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 ### LLM outcomes
 | ID | Requirement | P | Source |
 |---|---|---|---|
-| FR-25 | If an LLM call fails: it raises any `anthropic.APIError` (connection, timeout, rate limit or HTTP status error, after the SDK's retries), or the call can't be made at all (for example no API key is configured, which the SDK reports as a `TypeError`), the API must return 502 `{"detail": "LLM service unavailable"}`. The assistant message gets status `error` and content "LLM service unavailable". Tool executions already run stay logged. The original error is written to the server log | M | S3 §4 |
-| FR-26 | `stop_reason` handling: `end_turn` → content = the text blocks joined (status `complete`). `refusal` → content "I can't help with that request." (status `complete`). `max_tokens` → the text so far + " [response cut off]" (status `complete`). Any other value → 502 `{"detail": "Unexpected LLM response"}`, with status `error` and content "Unexpected LLM response" | M | S3 §4 step 5 |
+| FR-25 | If an LLM call fails, the LLM layer raises its own `LLMUnavailableError`: for any Gemini SDK error (`google.genai.errors.APIError`, i.e. an HTTP error such as 429 or 5xx after the SDK's retries), a connection or timeout error, or a call that can't be made at all (no `GEMINI_API_KEY` configured). The service catches only `LLMUnavailableError`, and the API must return 502 `{"detail": "LLM service unavailable"}`. The assistant message gets status `error` and content "LLM service unavailable". Tool executions already run stay logged. The original error is written to the server log | M | S3 §4 |
+| FR-26 | `stop_reason` handling (the internal stop reason from FR-37): `end_turn` → content = the text blocks joined (status `complete`). `refusal` → content "I can't help with that request." (status `complete`). `max_tokens` → the text so far + " [response cut off]" (status `complete`). Any other value → 502 `{"detail": "Unexpected LLM response"}`, with status `error` and content "Unexpected LLM response" | M | S3 §4 step 5 |
 
 ### Tools
 | ID | Requirement | P | Source |
@@ -82,8 +82,9 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 | FR-30 | **Database query** runs one read-only SELECT on `sample.db` and returns `{columns, rows, row_count, truncated}`. It returns at most 100 rows. `row_count` is the number of rows returned, and `truncated` is true if more exist | M | S1:201-208, C1, D4 |
 | FR-31 | **Date/time** supports `current` (optional `timezone`, default UTC), `convert` (`datetime`, `from_tz`, `to_tz`) and `calculate` (`datetime` + at least one of `days`/`hours`/`minutes`, which may be negative). The output is `{"result": "<ISO 8601>"}` only: with offset when a timezone is known (`current`, `convert`, or a `calculate` input that has an offset), without offset for a `calculate` input without one. For `convert`, `datetime` must have no offset (`from_tz` defines it); an input with an offset gives "Invalid input: datetime must not include an offset for convert". Unknown timezone → "Unknown timezone: X" | M | S1:210-219 |
 | FR-32 | `GET /tools` must return `{"tools": [{name, description, parameters}]}` for all 5 tools, with `parameters` in the S1:102-119 format | M | S1:270-280 |
-| FR-33 | Tool definitions sent to the LLM must be `{name, description, input_schema}`, where `input_schema` is the tool's S1 `parameters` unchanged (limits such as `maxLength` included). The executor validates every input against the same schema (FR-17) | M | S1:102-119, S3 §3.1 |
-| FR-36 | Every LLM request must use `model` = `LLM_MODEL` (default `claude-opus-5-5`), `max_tokens` 16,000 and a fixed `output_config.effort` of `medium`. No `thinking` parameter is sent (Claude Opus 5.5 thinks by default and can't turn it off, so FR-21/FR-22 still handle thinking blocks) | M | D6 |
+| FR-33 | Tool definitions are given to the LLM layer as `{name, description, input_schema}` (internal format), where `input_schema` is the tool's S1 `parameters` unchanged (limits such as `maxLength` included). The LLM layer sends each one as a Gemini function declaration `{name, description, parameters_json_schema}` with that same schema. The executor validates every input against the same schema (FR-17) | M | S1:102-119, S3 §3.1 |
+| FR-36 | Every LLM request must use Gemini's `generate_content`, `model` = `LLM_MODEL` (default `gemini-3.1-flash-lite`), `max_output_tokens` 16,000 and the system prompt as `system_instruction`. No thinking settings are sent (the model's default applies; any thought parts are still handled by FR-21/FR-22). Tools are sent as declarations only, so the SDK never runs a function itself (the app's tool loop does) | M | D6 |
+| FR-37 | **Internal LLM format and translation.** The chat service speaks one internal format, and only `app/llm` knows Gemini's. Internal messages are `{role: user|assistant, content: text or [blocks]}` with block types `text`, `thinking`, `tool_use {id, name, input}` and `tool_result {tool_use_id, content, is_error?}`. **Out (to Gemini):** role `assistant` → `model`; `text` → text part; `thinking` → thought part; `tool_use` → `function_call` part with the same `id`; the `tool_result` blocks of a round → `function_response` parts in **one** `user` Content, each with the call's `id` and `name` and `response` `{"result": ...}` (or `{"error": ...}` when `is_error`). A `thought_signature` received on a part is stored on its block and sent back on the same part unchanged. **In (from Gemini):** parts → blocks the same way. `stop_reason`: any `function_call` part → `tool_use`; finish reason `STOP` → `end_turn`; `MAX_TOKENS` → `max_tokens`; `SAFETY`, `PROHIBITED_CONTENT`, `BLOCKLIST`, `SPII` or a blocked prompt → `refusal`; any other value → its name unchanged (FR-26: unexpected). Tokens: `input_tokens` = `prompt_token_count`, `output_tokens` = `candidates_token_count` + `thoughts_token_count` (missing counts are 0) | M | S1:30, D9 |
 
 ### Logging and health
 | ID | Requirement | P | Source |
@@ -97,7 +98,7 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 |---|---|---|---|
 | NFR-1 | Platform | The app runs on Python 3.12 (meets 3.11+) | S1:341 |
 | NFR-2 | Deployment | From a clean clone with `.env` set, `docker compose up --build` serves `/health` within 60 s, and the non-root container user can write to `/app/data` | S1:347, R12 |
-| NFR-3 | Deployment | `docker compose run --rm api pytest` passes with no `ANTHROPIC_API_KEY` set | S3 §10 |
+| NFR-3 | Deployment | `docker compose run --rm api pytest` passes with no `GEMINI_API_KEY` set | S3 §10 |
 | NFR-4 | Persistence | Conversations and messages survive an app restart (same data files) | G10 |
 | NFR-5 | Security | The calculator never runs `eval`/`exec`. Names, attributes, calls to non-whitelisted functions, and expressions over 200 characters are rejected | S1:320, D4 |
 | NFR-6 | Security | The database tool can't change data or read app data. INSERT/UPDATE/DELETE/DROP/CREATE/ATTACH/PRAGMA and multiple statements are rejected, and a query running past 2 s is aborted | S1:320, D4 |
@@ -106,7 +107,7 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 | NFR-9 | Testability | Automated tests use no network and no API key, and give the same result on every run (fake LLM, fixed seeds, injected clock and seed date) | S1:348, R7 |
 | NFR-10 | Data | Sample data is seeded only when `sample.db` doesn't exist, and the same seed date always gives identical data. Orders cover the 12 months before the seed date | S3 §5 |
 | NFR-11 | Submission | The repo has README.md (the 6 sections of S1:389-395 plus decisions D1-D5 and the SQL deviation), AI_USAGE.md (the S1:399-413 template), Dockerfile, docker-compose.yml, requirements.txt, code and tests | S1:374-413 |
-| NFR-12 | Maintainability (REQ-51) | Separation of concerns: each layer of architecture §2.1 has one job, and imports go one way only (api → services → tools / llm / models). Tools import only the standard library, `jsonschema` and `app.tools`; services never import `fastapi` or `anthropic`; only `app/llm` imports `anthropic`, and it doesn't import `app.config`; the routes don't import `sqlalchemy` (except the `Session` type) or `app.models`. The chat service never sees SDK objects (it gets an `LLMResult`), and the tool names in the system prompt come from the registry | S1:30 ("well-structured") |
+| NFR-12 | Maintainability (REQ-51) | Separation of concerns: each layer of architecture §2.1 has one job, and imports go one way only (api → services → tools / llm / models). Tools import only the standard library, `jsonschema` and `app.tools`; services never import `fastapi` or `google.genai`; only `app/llm` imports `google.genai`, and it doesn't import `app.config`; the routes don't import `sqlalchemy` (except the `Session` type) or `app.models`. The chat service never sees SDK objects or SDK errors (it gets an `LLMResult` or an `LLMUnavailableError`), and the tool names in the system prompt come from the registry | S1:30 ("well-structured") |
 
 ## 5. Data rules
 
@@ -133,7 +134,7 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 
 | Tool | Description (draft) | parameters |
 |---|---|---|
-| `calculator` | "Evaluate a math expression. Use for ANY arithmetic, percentages or math functions. Never calculate in your head." | `expression: string (maxLength 200)`, required |
+| `calculator` | "Evaluate a math expression. Use for ANY arithmetic, percentages or math functions, even trivial ones or ones you think have no answer (such as division by zero): the tool reports the error. Never calculate in your head." | `expression: string (maxLength 200)`, required |
 | `web_search` | "Search the web for current information. Returns titles, snippets and URLs." | `query: string (maxLength 300)`, required |
 | `weather` | "Get the current weather for a location." | `location: string (maxLength 100)`, required |
 | `database_query` | "Run ONE read-only SQLite SELECT on the store database. Tables: users(id, name, email, country, created_at), products(id, name, category, price), orders(id, user_id, order_date, status, total), order_items(id, order_id, product_id, quantity, unit_price). Use date('now', ...) for relative dates." | `sql: string (maxLength 2000)`, required |
@@ -144,7 +145,7 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 - **Assumptions:**
   - A1: a single client, with no authentication.
   - A2: mock data is acceptable (S1:52-53).
-  - A3: the user's Anthropic account may be enforced on the history-editing check, so D5 must hold.
+  - A3: Gemini requires each `thought_signature` to come back on its original part (needed for function calling on Gemini 3), so FR-37 keeps it on the block.
 - **Decisions:** D0-D7 and C1-C3 in S3 §8 and §13. G1-G15 in S2 §5.
 
 ## 8. Open questions
@@ -161,6 +162,7 @@ None.
 | 0.4 | 2026-11-10 | Q7 (found while starting T-6, approved by the user): the Claude docs list `maxLength`/`minLength` and numeric limits as not supported in strict tool schemas, and `messages.create` sends schemas unchanged. FR-33: they are removed from `input_schema` only; GET /tools and executor validation keep them. AC-43 and AC-53 extended. A real-API check was prepared but not run (no API credits) |
 | 0.5 | 2026-11-10 | Separation of concerns made explicit (approved by the user while starting T-6): new NFR-12 (S1:30) with AC-59 (import boundaries, T-6; the routes/`app.models` rule from T-8), AC-60 (neutral `LLMResult`, T-7) and AC-61 (tool names in the prompt from the registry, T-6). FR-24 wording extended. Architecture §2.1 and D8 added |
 | 0.6 | 2026-11-10 | Scope review against S1 (approved by the user): removed what S1 doesn't ask for. FR-33: no `strict`, no `additionalProperties`, `input_schema` = `parameters` unchanged (Q7 and R9 no longer apply). FR-36: no `thinking` parameter, `LLM_EFFORT` setting removed, effort fixed at `medium`. AC-43 and AC-53 reworded. Requirements doc: REQ-51 (S1:30) added → NFR-12 |
+| 0.7 | 2026-11-10 | LLM provider changed from Claude to Google Gemini (user's decision: Gemini credits). New D9 and FR-37 (internal format; only `app/llm` translates to Gemini). FR-10, FR-15, FR-25 (own `LLMUnavailableError`), FR-26, FR-33, FR-36, NFR-3, NFR-12, A3 reworded. AC-43, 47, 53, 58, 59, 60 reworded; AC-62, AC-63 added. Env var `ANTHROPIC_API_KEY` → `GEMINI_API_KEY`. New task T-7b. Risk R1 (found in a real-Gemini check: "What is 1/0?" answered without the calculator, 0/3): calculator description in §6 and the D0 app instructions now say that impossible or trivial math also goes to the calculator |
 
 ---
 
@@ -181,7 +183,7 @@ None.
 - `TOOL_TIMEOUT_S = 1.0` in timeout tests. A "slow tool" is made by monkeypatching a real tool's `run` to wait on a `threading.Event`, which the test sets at teardown, so no thread is left running. No extra tool is registered, so there are always 5 tools.
 - The app is built by `create_app(settings)`, so tests can build it with temporary files and build it a second time on the same files (restart test).
 - `sample.db` and `app.db` go in the pytest `tmp_path`.
-- `conftest.py` unsets `ANTHROPIC_API_KEY` and blocks network sockets for every test.
+- `conftest.py` unsets `GEMINI_API_KEY` and blocks network sockets for every test.
 
 **Commands**
 - All tests: `pytest`
@@ -240,7 +242,7 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 ### LLM outcomes
 | AC | FR/NFR | Given / When / Then | Level | Test |
 |---|---|---|---|---|
-| AC-58 | FR-25 | **Given** the real `LLMClient` with no API key set (no fake) **when** a message is sent **then** 502 `{"detail": "LLM service unavailable"}`, and the assistant message has status `error` (not stuck in `pending`) with content "LLM service unavailable" | int auto | `test_ac_58_no_api_key_502` |
+| AC-58 | FR-25 | **Given** the real `LLMClient` with no `GEMINI_API_KEY` set (no fake) **when** a message is sent **then** 502 `{"detail": "LLM service unavailable"}`, and the assistant message has status `error` (not stuck in `pending`) with content "LLM service unavailable" | int auto | `test_ac_58_no_api_key_502` |
 | AC-27 | FR-25, FR-34 | **Given** fake round 1 requests calculator, and round 2 raises an SDK connection error **then** 502 `{"detail": "LLM service unavailable"}`; the assistant message has status `error` and content "LLM service unavailable"; 1 ToolExecution row is still saved | int auto | `test_ac_27_llm_failure_502` |
 | AC-28 | FR-26 | **Given** fake stop_reason `refusal` **then** 200, content "I can't help with that request.", status complete | int auto | `test_ac_28_refusal` |
 | AC-29 | FR-26 | **Given** fake text "Partial" with `max_tokens` **then** content "Partial [response cut off]" | int auto | `test_ac_29_max_tokens` |
@@ -262,7 +264,7 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | AC-40 | FR-31 | Clock 2026-11-10T12:00:00Z: `current` tz Asia/Tokyo → `2026-11-10T21:00:00+09:00`; `convert` 2026-11-10T12:00:00 Europe/London→Asia/Tokyo → `2026-11-10T21:00:00+09:00`; `calculate` 2026-11-10T12:00:00 +30 days → `2026-12-10T12:00:00`; days −10 → `2026-10-31T12:00:00` | unit auto | `test_ac_40_datetime_operations` |
 | AC-41 | FR-31, FR-17 | Timezone "Mars/Base" → "Unknown timezone: Mars/Base"; `convert` without `to_tz` → "Invalid input:"; `calculate` without days/hours/minutes → "Invalid input:"; `convert` with datetime `2026-11-10T12:00:00+02:00` → "Invalid input: datetime must not include an offset for convert"; every success output has exactly the key `result` | unit auto | `test_ac_41_datetime_errors` |
 | AC-42 | FR-32 | `GET /tools` → 5 tools, each with name, description, and `parameters.type == "object"` | int auto | `test_ac_42_list_tools` |
-| AC-43 | FR-33, FR-36 | The LLM request's tools: 5 items, each exactly `{name, description, input_schema}` with `input_schema` equal to the tool's `parameters` from `GET /tools`; **given** `LLM_MODEL=test-model` the request has model "test-model", max_tokens 16000, effort "medium" and no `thinking` key; with `LLM_MODEL` unset, model "claude-opus-5-5" | int auto | `test_ac_43_llm_request_settings` |
+| AC-43 | FR-33, FR-36 | The Gemini request (recording stub) has 5 function declarations, each exactly `{name, description, parameters_json_schema}` with the schema equal to the tool's `parameters` from `GET /tools`; **given** `LLM_MODEL=test-model` the request has model "test-model", `max_output_tokens` 16000, the system prompt as `system_instruction`, mode `AUTO` and no thinking settings; with `LLM_MODEL` unset, model "gemini-3.1-flash-lite" | int auto | `test_ac_43_llm_request_settings` |
 
 ### Logging, health, platform
 | AC | FR/NFR | Given / When / Then | Level | Test |
@@ -270,7 +272,7 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | AC-44 | FR-34 | **Required test 6 (logging).** **Given** a turn with calculator `2+2` (ok) and `1/0` (error) **then** 2 ToolExecution rows linked to the assistant message id: the first has success true, output {result: 4.0}, error_message null; the second has success false, error_message "Division by zero"; both have execution_time_ms ≥ 0 | int auto | `test_ac_44_tool_execution_logging` |
 | AC-45 | FR-35 | `GET /health` → 200 `{"status": "ok"}` | int auto | `test_ac_45_health` |
 | AC-46 | NFR-4 | **Given** a conversation created through `create_app(settings)` **when** a second `create_app(settings)` is built on the same files **then** GET on the second app returns it with its messages | int auto | `test_ac_46_persistence_restart` |
-| AC-47 | NFR-9, NFR-3 | Inside the test suite: `ANTHROPIC_API_KEY` is not set, `socket.create_connection(("example.com", 80))` raises an error, and the app starts and serves `/health` (the LLM client is created lazily) | int auto | `test_ac_47_no_network_no_key` |
+| AC-47 | NFR-9, NFR-3 | Inside the test suite: `GEMINI_API_KEY` is not set, `socket.create_connection(("example.com", 80))` raises an error, and the app starts and serves `/health` (the LLM client is created lazily) | int auto | `test_ac_47_no_network_no_key` |
 | AC-48 | NFR-2 | `docker compose up --build` → `/health` 200 within 60 s; create a conversation and send "What's 2+2?" with a real key → 200 | man | stage 5 |
 | AC-49 | NFR-3 | `docker compose run --rm api pytest` passes without a key | man | stage 5 |
 | AC-50 | NFR-1 | The Dockerfile base image is `python:3.12-slim`; `python --version` in the container shows 3.12 | man | stage 5 |
@@ -281,14 +283,16 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 
 | AC | Requirement | Criterion | Level | Test |
 |---|---|---|---|---|
-| AC-59 | NFR-12 | Parsing every `app/**/*.py` with `ast` finds no forbidden import: `app/tools` imports only the standard library, `jsonschema` and `app.tools.*`; `app/services` imports no `fastapi`/`anthropic`; only `app/llm` imports `anthropic`, and `app/llm` doesn't import `app.config`; `app/api` imports no `sqlalchemy` except `sqlalchemy.orm.Session`, and (from T-8) no `app.models` | unit auto | `test_ac_59_layer_imports` |
-| AC-60 | NFR-12 | `LLMClient.complete` turns an SDK response (recorded stub) into an `LLMResult` (text, tool calls, stop reason, tokens, blocks) with no SDK types inside; the fake LLM returns `LLMResult` too | unit auto | `test_ac_60_llm_result` |
+| AC-59 | NFR-12 | Parsing every `app/**/*.py` with `ast` finds no forbidden import: `app/tools` imports only the standard library, `jsonschema` and `app.tools.*`; `app/services` imports no `fastapi`/`google.genai`; only `app/llm` imports `google.genai`, and `app/llm` doesn't import `app.config`; `app/api` imports no `sqlalchemy` except `sqlalchemy.orm.Session`, and (from T-8) no `app.models` | unit auto | `test_ac_59_layer_imports` |
+| AC-60 | NFR-12 | `LLMClient.complete` turns a Gemini SDK response (recording stub) into an `LLMResult` (text, tool calls, stop reason, tokens, blocks) with no SDK types inside; the fake LLM returns `LLMResult` too | unit auto | `test_ac_60_llm_result` |
 | AC-61 | NFR-12, FR-24 | **Given** an app built with a registry holding only calculator **when** a message is sent **then** the system prompt names calculator and none of the other tools; with the full registry it names every registered tool in registry order | int auto | `test_ac_61_prompt_tools_from_registry` |
+| AC-62 | FR-37, FR-13 | **Given** internal messages [user text, assistant [thinking with signature "sig1", text, tool_use weather id "c1", tool_use calculator id "c2"], user [tool_result c1 ok, tool_result c2 is_error "Division by zero"]] **when** the LLM layer builds the Gemini request **then** contents are [user, model, user]; the model Content holds a thought part with signature "sig1", a text part and 2 `function_call` parts (ids c1, c2); the last user Content holds exactly 2 `function_response` parts in order, with ids c1/c2, names weather/calculator, `{"result": ...}` for c1 and `{"error": "Division by zero"}` for c2 | unit auto | `test_ac_62_gemini_request_translation` |
+| AC-63 | FR-37, FR-26 | **Given** recorded Gemini responses **then** the `LLMResult` has: function_call parts → stop `tool_use` with tool calls (id, name, args) in order and the part's `thought_signature` kept on the block; `STOP` → `end_turn`; `MAX_TOKENS` → `max_tokens`; `SAFETY` and a blocked prompt → `refusal`; `OTHER` → "OTHER"; tokens 12 in and 5 + 3 out from `prompt_token_count` 12, `candidates_token_count` 5, `thoughts_token_count` 3 | unit auto | `test_ac_63_gemini_response_mapping` |
 
 ### Real-LLM checks (stage 5, risk R1/R5)
 | AC | FR | Given / When / Then | Level |
 |---|---|---|---|
-| AC-53 | FR-10, FR-12, FR-33 | Real LLM, "What's 15% tip on $85?" → the request with all 5 tool definitions is accepted (no 400), calculator is used, and the answer contains 12.75 | man / real_llm |
+| AC-53 | FR-10, FR-12, FR-33 | Real LLM, "What's 15% tip on $85?" → the request with all 5 function declarations is accepted (no 400), calculator is used, and the answer contains 12.75 | man / real_llm |
 | AC-54 | FR-13 | Real LLM, "What's the weather and time in London?" → weather and datetime are both used | man / real_llm |
 | AC-55 | FR-21, FR-22 | Real LLM, 3 turns with tools, then "What did you calculate earlier?" → no API error (history replay is accepted) and the answer refers to the earlier result | man / real_llm |
 | AC-56 | FR-30 | Real LLM, "How many orders were placed last month?" → database_query is used, and the answer gives a number | man / real_llm |
@@ -344,6 +348,7 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | FR-34 | 19, 20, 27, 44 |
 | FR-35 | 45 |
 | FR-36 | 43 |
+| FR-37 | 62, 63 |
 | NFR-1 | 50 |
 | NFR-2 | 48 |
 | NFR-3 | 47, 49 |
