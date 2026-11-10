@@ -7,6 +7,7 @@ Every test runs with:
 """
 
 import socket
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,6 +18,21 @@ from app.main import create_app
 
 class NetworkBlockedError(RuntimeError):
     """Raised when a test tries to open a network connection."""
+
+
+class TickingClock:
+    """A fake clock: every call returns a time 1 second after the previous call.
+
+    Used where tests check ordering, so two records never get the same timestamp.
+    """
+
+    def __init__(self, start=datetime(2026, 11, 10, 12, 0, 0, tzinfo=timezone.utc)):
+        self._next = start
+
+    def __call__(self):
+        now = self._next
+        self._next += timedelta(seconds=1)
+        return now
 
 
 @pytest.fixture(autouse=True)
