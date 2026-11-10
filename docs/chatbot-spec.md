@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 0.8 |
+| **Version** | 0.9 |
 | **Status** | Approved (2026-11-10) |
 | **Date** | 2026-11-10 |
 
@@ -164,6 +164,7 @@ None.
 | 0.6 | 2026-11-10 | Scope review against S1 (approved by the user): removed what S1 doesn't ask for. FR-33: no `strict`, no `additionalProperties`, `input_schema` = `parameters` unchanged (Q7 and R9 no longer apply). FR-36: no `thinking` parameter, `LLM_EFFORT` setting removed, effort fixed at `medium`. AC-43 and AC-53 reworded. Requirements doc: REQ-51 (S1:30) added → NFR-12 |
 | 0.7 | 2026-11-10 | LLM provider changed from Claude to Google Gemini (user's decision: Gemini credits). New D9 and FR-37 (internal format; only `app/llm` translates to Gemini). FR-10, FR-15, FR-25 (own `LLMUnavailableError`), FR-26, FR-33, FR-36, NFR-3, NFR-12, A3 reworded. AC-43, 47, 53, 58, 59, 60 reworded; AC-62, AC-63 added. Env var `ANTHROPIC_API_KEY` → `GEMINI_API_KEY`. New task T-7b. Risk R1 (found in a real-Gemini check: "What is 1/0?" answered without the calculator, 0/3): calculator description in §6 and the D0 app instructions now say that impossible or trivial math also goes to the calculator |
 | 0.8 | 2026-11-10 | Found in the user's manual T-8 check (approved by the user): real Gemini reported mock temperatures as °F, because nothing told it the unit. FR-29: the weather description now says the temperature is in °C (output keys unchanged, S1:196). §6 and AC-35 updated. New task T-8b |
+| 0.9 | 2026-11-10 | Found while starting T-10 (user's decision: keep D4 as written): SQLite asks the authorizer for a separate RECURSIVE action, so the D4 allow list (SELECT/READ/FUNCTION) rejects `WITH RECURSIVE`, and AC-39's recursive query would fail before the time limit is reached. AC-39 now uses a non-recursive cross join; AC-38 adds a recursive query to the rejected inputs |
 
 ---
 
@@ -260,8 +261,8 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | AC-35 | FR-29 | With `Random(42)`: same output on two calls with fresh generators; temperature, condition and humidity within FR-29 ranges over 100 calls; the tool description contains "°C" | unit auto | `test_ac_35_weather` |
 | AC-36 | FR-30, NFR-10 | Seed date 2026-11-10, seed 7: `SELECT COUNT(*) FROM orders WHERE order_date >= '2026-10-01' AND order_date < '2026-11-01'` (literal dates, never `date('now')` in tests) returns one row with the exact golden count. The count is computed once when the seeder is written and fixed in the test, so the test fails if the seed data changes. Seeding twice gives identical data, and all `order_date` are within 2025-11-10..2026-11-10 | unit auto | `test_ac_36_database_query` |
 | AC-37 | FR-30 | `SELECT * FROM orders` → 100 rows, `row_count` 100, `truncated: true` | unit auto | `test_ac_37_database_row_limit` |
-| AC-38 | NFR-6 | INSERT, UPDATE, DELETE, DROP TABLE, CREATE TABLE, ATTACH, PRAGMA, `SELECT 1; SELECT 2`, and `SELECT * FROM conversations` → all error results; row counts unchanged | unit auto | `test_ac_38_database_security` |
-| AC-39 | NFR-6 | `WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c) SELECT count(*) FROM c` (it must finish before returning any row) is aborted with an error result within 3 s | unit auto | `test_ac_39_database_query_timeout` |
+| AC-38 | NFR-6 | INSERT, UPDATE, DELETE, DROP TABLE, CREATE TABLE, ATTACH, PRAGMA, `SELECT 1; SELECT 2`, `WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x < 3) SELECT count(*) FROM c` (the D4 authorizer allows only SELECT/READ/FUNCTION), and `SELECT * FROM conversations` → all error results; row counts unchanged | unit auto | `test_ac_38_database_security` |
+| AC-39 | NFR-6 | `SELECT count(*) FROM orders a, orders b, orders c, orders d` (a cross join of about 6·10¹⁰ rows that must finish before returning any row, and uses only actions D4 allows) is aborted with an error result within 3 s | unit auto | `test_ac_39_database_query_timeout` |
 | AC-40 | FR-31 | Clock 2026-11-10T12:00:00Z: `current` tz Asia/Tokyo → `2026-11-10T21:00:00+09:00`; `convert` 2026-11-10T12:00:00 Europe/London→Asia/Tokyo → `2026-11-10T21:00:00+09:00`; `calculate` 2026-11-10T12:00:00 +30 days → `2026-12-10T12:00:00`; days −10 → `2026-10-31T12:00:00` | unit auto | `test_ac_40_datetime_operations` |
 | AC-41 | FR-31, FR-17 | Timezone "Mars/Base" → "Unknown timezone: Mars/Base"; `convert` without `to_tz` → "Invalid input:"; `calculate` without days/hours/minutes → "Invalid input:"; `convert` with datetime `2026-11-10T12:00:00+02:00` → "Invalid input: datetime must not include an offset for convert"; every success output has exactly the key `result` | unit auto | `test_ac_41_datetime_errors` |
 | AC-42 | FR-32 | `GET /tools` → 5 tools, each with name, description, and `parameters.type == "object"` | int auto | `test_ac_42_list_tools` |
