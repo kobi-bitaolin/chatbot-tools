@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 0.3 |
+| **Version** | 0.4 |
 | **Status** | Approved (2026-11-10) |
 | **Date** | 2026-11-10 |
 
@@ -82,7 +82,7 @@ Priority: **M** = Must (S1:339-354), **S** = Should included in scope (S2 Q1).
 | FR-30 | **Database query** runs one read-only SELECT on `sample.db` and returns `{columns, rows, row_count, truncated}`. It returns at most 100 rows. `row_count` is the number of rows returned, and `truncated` is true if more exist | M | S1:201-208, C1, D4 |
 | FR-31 | **Date/time** supports `current` (optional `timezone`, default UTC), `convert` (`datetime`, `from_tz`, `to_tz`) and `calculate` (`datetime` + at least one of `days`/`hours`/`minutes`, which may be negative). The output is `{"result": "<ISO 8601>"}` only: with offset when a timezone is known (`current`, `convert`, or a `calculate` input that has an offset), without offset for a `calculate` input without one. For `convert`, `datetime` must have no offset (`from_tz` defines it); an input with an offset gives "Invalid input: datetime must not include an offset for convert". Unknown timezone → "Unknown timezone: X" | M | S1:210-219 |
 | FR-32 | `GET /tools` must return `{"tools": [{name, description, parameters}]}` for all 5 tools, with `parameters` in the S1:102-119 format | M | S1:270-280 |
-| FR-33 | Tool definitions sent to the LLM must use `input_schema` (the same schema), with `additionalProperties: false` and `strict: true` | M | S3 §3.1 |
+| FR-33 | Tool definitions sent to the LLM must use `input_schema` (the same schema **without the keywords strict mode doesn't support**: `maxLength`, `minLength`, `minimum`, `maximum`, `multipleOf`), with `additionalProperties: false` and `strict: true`. `GET /tools` keeps the full schema, and the executor validates inputs against the full schema (FR-17), so the limits still hold | M | S3 §3.1, R9 |
 | FR-36 | Every LLM request must use `model` = `LLM_MODEL` (default `claude-opus-5-5`), `max_tokens` 16,000, `thinking: {type: "adaptive"}`, and `output_config.effort` = `LLM_EFFORT` (default `medium`) | M | D6 |
 
 ### Logging and health
@@ -157,6 +157,7 @@ None.
 | 0.1 | 2026-11-10 | First draft from S1-S3 |
 | 0.2 | 2026-11-10 | Independent review, 17 findings applied: calculator float/finite checks and domain errors (FR-27); exact error strings (FR-25, FR-26); replay rule and `llm_blocks` structure (FR-21, FR-22); round-limit entries logged (FR-15); timeout formatting (FR-18); ordering by id/clock (FR-2, FR-3); datetime output and offsets (FR-31); `row_count` (FR-30); empty system_prompt (FR-1); FR-36 model settings; reworked AC-15, 19, 20, 26, 27, 30, 32, 36, 37, 39, 41, 43, 46, 47; added AC-57 |
 | 0.3 | 2026-11-10 | Q5 (found in the T-3 Docker smoke test, approved by the user): FR-25 also covers an LLM call that can't be made (no API key → SDK `TypeError`), which gave a 500 and a message stuck in `pending`. Added AC-58 (T-12) |
+| 0.4 | 2026-11-10 | Q7 (found while starting T-6, approved by the user): the Claude docs list `maxLength`/`minLength` and numeric limits as not supported in strict tool schemas, and `messages.create` sends schemas unchanged. FR-33: they are removed from `input_schema` only; GET /tools and executor validation keep them. AC-43 and AC-53 extended. A real-API check was prepared but not run (no API credits) |
 
 ---
 
@@ -258,7 +259,7 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 | AC-40 | FR-31 | Clock 2026-11-10T12:00:00Z: `current` tz Asia/Tokyo → `2026-11-10T21:00:00+09:00`; `convert` 2026-11-10T12:00:00 Europe/London→Asia/Tokyo → `2026-11-10T21:00:00+09:00`; `calculate` 2026-11-10T12:00:00 +30 days → `2026-12-10T12:00:00`; days −10 → `2026-10-31T12:00:00` | unit auto | `test_ac_40_datetime_operations` |
 | AC-41 | FR-31, FR-17 | Timezone "Mars/Base" → "Unknown timezone: Mars/Base"; `convert` without `to_tz` → "Invalid input:"; `calculate` without days/hours/minutes → "Invalid input:"; `convert` with datetime `2026-11-10T12:00:00+02:00` → "Invalid input: datetime must not include an offset for convert"; every success output has exactly the key `result` | unit auto | `test_ac_41_datetime_errors` |
 | AC-42 | FR-32 | `GET /tools` → 5 tools, each with name, description, and `parameters.type == "object"` | int auto | `test_ac_42_list_tools` |
-| AC-43 | FR-33, FR-36 | The LLM request's tools: 5 items, each with `input_schema`, `strict: true` and `additionalProperties: false`; **given** `LLM_MODEL=test-model`, `LLM_EFFORT=low` the request has model "test-model", max_tokens 16000, thinking `{type: "adaptive"}` and effort "low"; with neither set, model "claude-opus-5-5" and effort "medium" | int auto | `test_ac_43_llm_request_settings` |
+| AC-43 | FR-33, FR-36 | The LLM request's tools: 5 items, each with `input_schema`, `strict: true` and `additionalProperties: false`, and no `maxLength` anywhere in `input_schema` (while `GET /tools` still shows `maxLength`); **given** `LLM_MODEL=test-model`, `LLM_EFFORT=low` the request has model "test-model", max_tokens 16000, thinking `{type: "adaptive"}` and effort "low"; with neither set, model "claude-opus-5-5" and effort "medium" | int auto | `test_ac_43_llm_request_settings` |
 
 ### Logging, health, platform
 | AC | FR/NFR | Given / When / Then | Level | Test |
@@ -276,7 +277,7 @@ Abbreviations: **auto** = automated, **man** = manual. "Fake returns X" means th
 ### Real-LLM checks (stage 5, risk R1/R5)
 | AC | FR | Given / When / Then | Level |
 |---|---|---|---|
-| AC-53 | FR-10, FR-12 | Real LLM, "What's 15% tip on $85?" → calculator is used, and the answer contains 12.75 | man / real_llm |
+| AC-53 | FR-10, FR-12, FR-33 | Real LLM, "What's 15% tip on $85?" → the request with all 5 strict tool definitions is accepted (no 400), calculator is used, and the answer contains 12.75 | man / real_llm |
 | AC-54 | FR-13 | Real LLM, "What's the weather and time in London?" → weather and datetime are both used | man / real_llm |
 | AC-55 | FR-21, FR-22 | Real LLM, 3 turns with tools, then "What did you calculate earlier?" → no API error (history replay is accepted) and the answer refers to the earlier result | man / real_llm |
 | AC-56 | FR-30 | Real LLM, "How many orders were placed last month?" → database_query is used, and the answer gives a number | man / real_llm |

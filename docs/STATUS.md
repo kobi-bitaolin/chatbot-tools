@@ -1,6 +1,6 @@
 # Project status: chatbot-tools
 
-- **Spec:** `docs/chatbot-spec.md` (v0.3, Approved, 2026-11-10)
+- **Spec:** `docs/chatbot-spec.md` (v0.4, Approved, 2026-11-10)
 - **Source:** `chatbot-tool.md` (S1)
 - **Conventions (Git, agreed 2026-11-10):**
   - `main` always works; only tested work is merged into it.
@@ -10,11 +10,18 @@
   - Remote: private repo https://github.com/kobi-bitaolin/chatbot-tools (created 2026-11-10).
   - **Standing yes (2026-11-10):** push `main` to `origin` after every merged task. Anything else (other branches, force-push, changing visibility, adding collaborators) needs a fresh yes. Make it public / share only at stage 6 with a fresh yes.
   - **Merges need a yes per task** (2026-11-10: the user declined a standing yes for merge + branch delete).
-- **Current stage:** 4b, TDD implementation, T-1..T-5 done; next T-6
+- **Current stage:** 4b, TDD implementation, T-1..T-5 done; T-6 started (branch `feat/tool-executor`, no code yet)
 - **Last updated:** 2026-11-10
 
 ## Next action
-Stages 1-3 and the task list approved 2026-11-10. T-1..T-3 done and merged; Milestone 1 approved 2026-11-10. T-4 done and merged. T-5 done and merged. Next: T-6 (tool base, registry, `GET /tools`, executor core, LLM request settings, **Opus**).
+Stages 1-3 and the task list approved 2026-11-10. T-1..T-3 done and merged; Milestone 1 approved 2026-11-10. T-4 done and merged. T-5 done and merged. **Now: T-6** on branch `feat/tool-executor` (only the spec v0.4 docs commit so far). Plan agreed so far:
+- `app/tools/base.py`: a plain (not frozen) `Tool` dataclass `{name, description, parameters (S1 format), run}`, so tests can monkeypatch `run` later (AC-19). Each tool module defines its `TOOL` (schemas and descriptions from spec §6, `maxLength` included).
+- `app/tools/registry.py`: holds the tools in a fixed order. `api_definitions()` = `input_schema` (a copy of `parameters` without `maxLength`/`minLength`/`minimum`/`maximum`/`multipleOf`, plus `additionalProperties: false`) and `strict: true` (FR-33, v0.4). `GET /tools` returns the full S1 `parameters`.
+- Only 3 tools exist until T-9 (datetime) and T-10 (database), so AC-10, AC-42 and AC-43 check "all registered tools", with an expected-names list that grows to 5 in T-9/T-10 (they stay "partly" until then).
+- `app/tools/executor.py`: a module-level `ThreadPoolExecutor(max_workers=8)`, `ToolResult` (S1:121-131 + `error`), runs one round in parallel, returns results in request order, catches `ToolError` (its message) and any other exception ("Tool failed unexpectedly", traceback logged). Unknown tool, schema validation and timeout come in T-11. Unit tests: order, parallel run (Events, not timing), error catching.
+- FR-36 in `LLMClient`: `thinking: {type: "adaptive"}` and `output_config: {effort: LLM_EFFORT}`. For AC-43, `LLMClient` takes an optional SDK object, so a recording stub replaces the SDK (no network). The test must `delenv` `LLM_MODEL`/`LLM_EFFORT`, because `.env` now exists on this machine.
+- Chat service gets the definitions from a registry on `app.state` (`create_app(..., registry=...)`).
+- Then: run the suite, update STATUS, commit, ask for the merge yes.
 
 ## Open questions
 | # | Question | Blocking? |
@@ -26,6 +33,7 @@ Stages 1-3 and the task list approved 2026-11-10. T-1..T-3 done and merged; Mile
 | G6, G7 | ~~DB approach, limits~~ Decided in architecture §13 | No |
 | Q4 | ~~Git init and commit style~~ Done 2026-11-10 (see Conventions) | No |
 | Q5 | ~~No API key gives 500 + stuck `pending`~~ Approved 2026-11-10: FR-25 extended, AC-58 added, built in T-12 (spec v0.3) | No |
+| Q7 | ~~Strict tool schemas reject `maxLength`?~~ Approved 2026-11-10 (option A): removed from `input_schema` only (spec v0.4). A one-call real-API check is ready (`strict_maxlength_check.py` in the session scratchpad; rewrite if gone) but **not run: the API account has no credits** (the key works, `.env` is in place and checked safe). The user doesn't want to pay now; offer the $5 credit option again before stage 5 (needed for AC-53..56 and a live demo) | No |
 | Q6 | ~~Refusal fallbacks (beta)~~ Out of scope 2026-11-10: not in S1; FR-26 already handles refusals. At most a README "with more time" line in stage 6 | No |
 
 ## Later, if time allows (remind the user at the end of stage 5)
@@ -43,10 +51,11 @@ See `docs/chatbot-tasks.md`.
 | T-3 basic chat | done 2026-11-10 |
 | T-4 calculator | done 2026-11-10 |
 | T-5 mock tools | done 2026-11-10 |
-| T-6..T-13 | not started |
+| T-6 tool executor | in progress (spec v0.4 done; code not started) |
+| T-7..T-13 | not started |
 
 ## AI usage log
-`docs/ai-usage-log.md` (entries so far: 10)
+`docs/ai-usage-log.md` (entries so far: 11)
 
 ## Acceptance criteria results
 - Pass: AC-1, AC-2, AC-3, AC-4, AC-6, AC-7, AC-8, AC-9, AC-11, AC-12, AC-22, AC-45, AC-46, AC-47 (also inside Docker; early AC-49 check: suite passes in the container without a key)
@@ -59,5 +68,6 @@ See `docs/chatbot-tasks.md`.
 ## Decisions and changes since spec approval
 | Date | Change | Spec version | Affected IDs |
 |---|---|---|---|
+| 2026-11-10 | Q7: strict-mode-unsupported keywords (`maxLength` etc.) removed from `input_schema` only; AC-43, AC-53 extended | 0.4 | FR-33, AC-43, AC-53, R9 |
 | 2026-11-10 | Q5: FR-25 also covers an LLM call that can't be made (no API key). New AC-58 in T-12 | 0.3 | FR-25, AC-58, T-12 |
 | 2026-11-10 | Host port made configurable (`API_PORT`, default 8000) because port 8000 was taken on this machine. Deployment detail only, no behavior change | 0.2 | NFR-2 (AC-48 uses `API_PORT` if 8000 is taken) |

@@ -296,7 +296,7 @@ With this, all 6 required tests (S1:348-354) and every failure path can be teste
 | R6 | Timezones fail in Docker | `tzdata`; a datetime convert check inside the container in the skeleton task |
 | R7 | Flaky tests | Fake LLM, fixed seeds, injected clock and seed date, no network |
 | R8 | API cost during manual tests | Few manual checks; model switchable via `LLM_MODEL` |
-| R9 | `strict: true` may reject some schema features | The executor validates every input itself with `jsonschema` anyway. If the API rejects a schema, drop `strict` for that tool |
+| R9 | `strict: true` may reject some schema features | The executor validates every input itself with `jsonschema` anyway. Spec v0.4: the registry removes the keywords strict mode doesn't support (`maxLength` etc.) from `input_schema`. If the API still rejects a schema, drop `strict` for that tool |
 | R10 | Fake LLM drifts from the real response shape | The fake uses the same block types and stop reasons as the SDK, plus one real-LLM smoke check per stage-5 run |
 | R11 | Orphan rows after delete/reset | ORM cascade + a test that counts rows after delete and reset |
 | R12 | Non-root user can't write the volume | `chown` in the Dockerfile; checked in the skeleton task by starting compose and creating a conversation |
