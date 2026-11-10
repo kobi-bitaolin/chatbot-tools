@@ -77,9 +77,9 @@ def test_executor_catches_unexpected_error_and_logs_it(caplog):
     assert "internal detail" in caplog.text  # but the traceback is logged
 
 
-def test_executor_real_calculator():
+def test_executor_real_calculator(tmp_path):
     from app.tools.registry import default_registry
 
-    [result] = ToolExecutor(default_registry()).run_round([ToolCall("calculator", {"expression": "2+2"})])
+    [result] = ToolExecutor(default_registry(tmp_path / "sample.db")).run_round([ToolCall("calculator", {"expression": "2+2"})])
 
     assert (result.success, result.output) == (True, {"result": 4.0})

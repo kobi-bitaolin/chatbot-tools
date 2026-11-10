@@ -18,8 +18,8 @@ from app.main import create_app
 from tests.fake_llm import FakeLLM
 
 
-# The registered tools, in registry order. Grows to 5 in T-10 (database).
-EXPECTED_TOOLS = ["calculator", "web_search", "weather", "datetime"]
+# The registered tools, in registry order (all 5 since T-10).
+EXPECTED_TOOLS = ["calculator", "web_search", "weather", "datetime", "database_query"]
 
 
 class NetworkBlockedError(RuntimeError):

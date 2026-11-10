@@ -8,7 +8,9 @@ places, in the format each one needs:
   translates it for the provider (FR-37).
 """
 
-from app.tools import calculator, datetime_tool, weather, web_search
+from pathlib import Path
+
+from app.tools import calculator, database, datetime_tool, weather, web_search
 from app.tools.base import Tool
 
 
@@ -37,6 +39,14 @@ class ToolRegistry:
         ]
 
 
-def default_registry() -> ToolRegistry:
-    # database_query (T-10) is added here.
-    return ToolRegistry([calculator.TOOL, web_search.TOOL, weather.TOOL, datetime_tool.TOOL])
+def default_registry(sample_db_path: Path) -> ToolRegistry:
+    # The database tool needs to know its file; app/main.py passes the configured path.
+    return ToolRegistry(
+        [
+            calculator.TOOL,
+            web_search.TOOL,
+            weather.TOOL,
+            datetime_tool.TOOL,
+            database.make_tool(sample_db_path),
+        ]
+    )

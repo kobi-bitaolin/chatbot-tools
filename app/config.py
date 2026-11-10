@@ -23,3 +23,7 @@ class Settings(BaseSettings):
     @property
     def app_db_path(self) -> Path:
         return self.data_dir / "app.db"
+
+    @property
+    def sample_db_path(self) -> Path:
+        return self.data_dir / "sample.db"
