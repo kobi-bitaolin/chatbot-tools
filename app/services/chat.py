@@ -4,17 +4,18 @@ This is the only code that writes to the app database during a turn.
 A turn can have several LLM rounds: while the LLM asks for tools, the tools
 run and their results go back to it, until it gives a final answer (FR-12).
 After MAX_TOOL_ROUNDS tool rounds, one last call with tool choice "none"
-makes the LLM answer in text (FR-15). T-12 adds the other stop reasons and
-LLM errors.
+makes the LLM answer in text (FR-15). The stop reasons (FR-26) and LLM
+failures (FR-25) decide how the turn ends.
 """
 
 import json
+import logging
 from collections.abc import Callable
 from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.llm.result import LLMResult
+from app.llm.result import LLMResult, LLMUnavailableError
 from app.models import Message, ToolExecution
 from app.services.conversations import get_conversation
 from app.tools.executor import ToolCall, ToolExecutor, ToolResult
@@ -24,6 +25,24 @@ DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
 MAX_HISTORY_TURNS = 20  # FR-23
 MAX_TOOL_ROUNDS = 5  # FR-15
 LIMIT_ERROR = "Tool call limit reached"
+UNAVAILABLE = "LLM service unavailable"  # FR-25
+UNEXPECTED = "Unexpected LLM response"  # FR-26
+REFUSAL_TEXT = "I can't help with that request."  # FR-26
+CUT_OFF_SUFFIX = " [response cut off]"  # FR-26
+
+logger = logging.getLogger(__name__)
+
+
+class TurnFailedError(Exception):
+    """The turn ended in an error (FR-25, FR-26). `detail` is the 502 body's text.
+
+    The assistant message is already saved with status `error` when this is
+    raised; app/main.py turns it into the 502 response.
+    """
+
+    def __init__(self, detail: str):
+        super().__init__(detail)
+        self.detail = detail
 
 
 def build_app_instructions(tool_names: list[str]) -> str:
@@ -119,9 +138,14 @@ def send_message(
     tool_choice = {"type": "auto"}
 
     while True:
-        result: LLMResult = llm.complete(
-            system=system, messages=messages, tools=tools, tool_choice=tool_choice
-        )
+        try:
+            result: LLMResult = llm.complete(
+                system=system, messages=messages, tools=tools, tool_choice=tool_choice
+            )
+        except LLMUnavailableError:
+            # FR-25: the original error goes to the server log, the client gets a fixed text.
+            logger.exception("LLM call failed")
+            fail_turn(session, clock, conversation, assistant, UNAVAILABLE)
         tokens_used += result.input_tokens + result.output_tokens  # FR-19
         # All blocks go back unchanged (thinking included), so the LLM sees its own turn.
         assistant_turn = {"role": "assistant", "content": result.blocks}
@@ -149,9 +173,15 @@ def send_message(
         turn_blocks.append(tool_turn)
         messages += [assistant_turn, tool_turn]
 
-    # FR-11 / FR-26 (end_turn): the final answer is the last response's text.
-    # The other stop reasons (refusal, max_tokens, ...) come in T-12.
-    assistant.content = result.text
+    # FR-11 / FR-26: the final answer depends on why the LLM stopped.
+    if result.stop_reason == "end_turn":
+        assistant.content = result.text
+    elif result.stop_reason == "refusal":
+        assistant.content = REFUSAL_TEXT
+    elif result.stop_reason == "max_tokens":
+        assistant.content = result.text + CUT_OFF_SUFFIX
+    else:
+        fail_turn(session, clock, conversation, assistant, UNEXPECTED)
     assistant.status = "complete"
     assistant.tools_used = tools_used
     assistant.tokens_used = tokens_used
@@ -159,6 +189,19 @@ def send_message(
     conversation.last_message_at = clock()  # FR-7
     session.commit()
     return assistant
+
+
+def fail_turn(session: Session, clock: Callable[[], datetime], conversation, assistant: Message, detail: str):
+    """FR-25, FR-26: mark the turn as failed and stop. Never returns.
+
+    The message becomes `error` (not left `pending`) and keeps `detail` as its
+    content. Tool runs already logged stay. History replay skips this turn (FR-21).
+    """
+    assistant.content = detail
+    assistant.status = "error"
+    conversation.last_message_at = clock()
+    session.commit()
+    raise TurnFailedError(detail)
 
 
 def limit_result(call: ToolCall) -> ToolResult:

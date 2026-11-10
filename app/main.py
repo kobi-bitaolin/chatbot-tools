@@ -17,6 +17,7 @@ from app.config import Settings
 from app.db import Base, make_engine, make_session_factory
 from app.llm.client import LLMClient
 from app.sample_data import seed_if_missing
+from app.services.chat import TurnFailedError
 from app.services.conversations import ConversationNotFoundError
 from app.tools.executor import ToolExecutor
 from app.tools.registry import ToolRegistry, default_registry
@@ -61,6 +62,10 @@ def create_app(
     @app.exception_handler(ConversationNotFoundError)
     def conversation_not_found(request: Request, error: ConversationNotFoundError):
         return JSONResponse(status_code=404, content={"detail": "Conversation not found"})
+
+    @app.exception_handler(TurnFailedError)
+    def turn_failed(request: Request, error: TurnFailedError):
+        return JSONResponse(status_code=502, content={"detail": error.detail})  # FR-25, FR-26
 
     app.include_router(router)
     return app
