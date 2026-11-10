@@ -263,5 +263,6 @@ This paid off during the project: switching the LLM provider from Claude to Gemi
 - Weather and web search are mocks, as the assignment allows. Weather values are random, so they ignore city and season.
 - Long chats are trimmed, not summarized; with more time, old turns would be summarized.
 - Not built: streaming responses, a real weather API, custom tool registration, tool usage analytics, rate limiting per tool.
+- With more time, I'd add a simple frontend: a chat page on top of the API, so you could use the chatbot without curl or Swagger UI.
 
 The project was built spec-first and test-first. Requirements, architecture, spec, tasks and the verification report are in `docs/`.
